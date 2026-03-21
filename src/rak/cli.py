@@ -69,6 +69,35 @@ def index(ctx: click.Context, limit: int) -> None:
 
 
 @main.command()
+@click.pass_context
+def status(ctx: click.Context) -> None:
+    """Show index status and metadata."""
+    import json as json_mod
+    from rak.metadata import load_metadata
+
+    config: RakConfig = ctx.obj["config"]
+    json_out = ctx.obj["json"]
+    meta = load_metadata(config.data_dir)
+
+    if meta is None:
+        click.echo("No index found. Run 'rak index' first.")
+        return
+
+    if json_out:
+        click.echo(json_mod.dumps({
+            "item_count": meta.item_count,
+            "model_name": meta.model_name,
+            "last_indexed": meta.last_indexed,
+            "data_directory": str(config.data_dir),
+        }, indent=2))
+    else:
+        click.echo(f"Index: {meta.item_count} items")
+        click.echo(f"Model: {meta.model_name}")
+        click.echo(f"Last indexed: {meta.last_indexed}")
+        click.echo(f"Data directory: {config.data_dir}")
+
+
+@main.command()
 @click.argument("query")
 @click.option("--hybrid", is_flag=True, help="Use hybrid search (vector + BM25)")
 @click.option("--limit", default=10, help="Number of results")

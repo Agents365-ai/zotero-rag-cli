@@ -61,6 +61,7 @@ def test_search_model_download_error():
 
 import json as json_mod
 from pathlib import Path
+from rak.metadata import save_metadata
 
 
 def test_index_writes_metadata(tmp_path: Path):
@@ -93,3 +94,37 @@ def test_index_writes_metadata(tmp_path: Path):
     meta = json_mod.loads(meta_path.read_text())
     assert meta["item_count"] >= 1
     assert meta["model_name"] == "all-MiniLM-L6-v2"
+
+
+def test_status_no_index(tmp_path: Path):
+    from rak.config import RakConfig
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+    with patch("rak.cli.RakConfig", return_value=fake_config):
+        result = runner.invoke(main, ["status"])
+    assert result.exit_code == 0
+    assert "No index found" in result.output
+
+
+def test_status_with_index(tmp_path: Path):
+    from rak.config import RakConfig
+    save_metadata(tmp_path, model_name="all-MiniLM-L6-v2", item_count=342)
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+    with patch("rak.cli.RakConfig", return_value=fake_config):
+        result = runner.invoke(main, ["status"])
+    assert result.exit_code == 0
+    assert "342" in result.output
+    assert "all-MiniLM-L6-v2" in result.output
+
+
+def test_status_json_output(tmp_path: Path):
+    from rak.config import RakConfig
+    save_metadata(tmp_path, model_name="all-MiniLM-L6-v2", item_count=100)
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+    with patch("rak.cli.RakConfig", return_value=fake_config):
+        result = runner.invoke(main, ["--json", "status"])
+    data = json_mod.loads(result.output)
+    assert data["item_count"] == 100
+    assert data["model_name"] == "all-MiniLM-L6-v2"
