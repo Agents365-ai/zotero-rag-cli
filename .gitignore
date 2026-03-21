@@ -10,3 +10,6 @@ build/
 *.sqlite
 docs/plans/
 docs/research/
+CLAUDE.md
+docs/superpowers/
+logs/
