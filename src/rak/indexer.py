@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 
 from rak.bm25 import BM25Index
 from rak.embedder import Embedder
+from rak.errors import EmptyLibraryError, ZotNotFoundError
 from rak.store import VectorStore
 
 
@@ -31,13 +33,18 @@ def build_document_text(item: dict) -> str:
 
 
 def fetch_zot_items(zot_command: str = "zot", limit: int = 5000) -> list[dict]:
+    if not shutil.which(zot_command):
+        raise ZotNotFoundError(zot_command)
     result = subprocess.run(
         [zot_command, "--json", "--limit", str(limit), "list"],
         capture_output=True, text=True,
     )
     if result.returncode != 0:
         raise RuntimeError(f"zot command failed: {result.stderr}")
-    return parse_zot_items(result.stdout)
+    items = parse_zot_items(result.stdout)
+    if not items:
+        raise EmptyLibraryError()
+    return items
 
 
 def index_items(
