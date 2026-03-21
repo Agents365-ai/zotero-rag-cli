@@ -30,3 +30,6 @@ packages = ["src/rak"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "network: tests requiring network access (model downloads)",
+]
