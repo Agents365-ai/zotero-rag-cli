@@ -1,6 +1,7 @@
 from unittest.mock import patch
 from rak.errors import RakError, ZotNotFoundError, EmptyLibraryError, ModelDownloadError
 from rak.indexer import fetch_zot_items
+from rak.embedder import Embedder
 import pytest
 
 
@@ -35,3 +36,9 @@ def test_fetch_zot_items_raises_empty_library():
         mock_run.return_value.stdout = "[]"
         with pytest.raises(EmptyLibraryError):
             fetch_zot_items("zot")
+
+
+def test_embedder_raises_model_download_error():
+    with patch("rak.embedder.SentenceTransformer", side_effect=OSError("Connection refused")):
+        with pytest.raises(ModelDownloadError, match="Connection refused"):
+            Embedder("bad-model-name")

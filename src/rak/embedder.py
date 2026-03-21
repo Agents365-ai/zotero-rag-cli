@@ -8,7 +8,11 @@ from rak.config import DEFAULT_MODEL
 class Embedder:
     def __init__(self, model_name: str = DEFAULT_MODEL) -> None:
         self._model_name = model_name
-        self._model = SentenceTransformer(model_name, trust_remote_code=True)
+        try:
+            self._model = SentenceTransformer(model_name, trust_remote_code=True)
+        except Exception as exc:
+            from rak.errors import ModelDownloadError
+            raise ModelDownloadError(model_name, str(exc)) from exc
 
     @property
     def model_name(self) -> str:
