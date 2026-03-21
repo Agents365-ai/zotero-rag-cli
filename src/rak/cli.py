@@ -4,6 +4,7 @@ import click
 
 from rak import __version__
 from rak.config import RakConfig
+from rak.errors import EmptyLibraryError, ModelDownloadError, ZotNotFoundError
 
 
 @click.group()
@@ -36,22 +37,33 @@ def index(ctx: click.Context, limit: int) -> None:
     json_out = ctx.obj["json"]
     config.data_dir.mkdir(parents=True, exist_ok=True)
 
-    click.echo("Loading embedding model...")
-    embedder = Embedder(config.model_name)
+    try:
+        click.echo("Loading embedding model...")
+        embedder = Embedder(config.model_name)
 
-    click.echo("Fetching items from zot...")
-    items = fetch_zot_items(config.zot_command, limit=limit)
-    click.echo(f"Found {len(items)} items.")
+        click.echo("Fetching items from zot...")
+        items = fetch_zot_items(config.zot_command, limit=limit)
+        click.echo(f"Found {len(items)} items.")
 
-    vector_store = VectorStore(config.chroma_dir, embedder.dimension)
-    bm25 = BM25Index(config.fts_db_path)
+        vector_store = VectorStore(config.chroma_dir, embedder.dimension)
+        bm25 = BM25Index(config.fts_db_path)
 
-    def on_progress(current: int, total: int) -> None:
-        click.echo(f"  Indexed {current}/{total}...")
+        def on_progress(current: int, total: int) -> None:
+            click.echo(f"  Indexed {current}/{total}...")
 
-    count = index_items(items, embedder, vector_store, bm25, on_progress)
-    bm25.close()
-    click.echo(format_index_stats(count, output_json=json_out))
+        count = index_items(items, embedder, vector_store, bm25, on_progress)
+        bm25.close()
+        click.echo(format_index_stats(count, output_json=json_out))
+    except EmptyLibraryError as exc:
+        click.echo(str(exc))
+        ctx.exit(0)
+    except ZotNotFoundError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        ctx.exit(1)
+    except ModelDownloadError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        click.echo("Check your internet connection and try again.", err=True)
+        ctx.exit(1)
 
 
 @main.command()
@@ -70,19 +82,24 @@ def search(ctx: click.Context, query: str, hybrid: bool, limit: int) -> None:
     config: RakConfig = ctx.obj["config"]
     json_out = ctx.obj["json"]
 
-    embedder = Embedder(config.model_name)
-    vector_store = VectorStore(config.chroma_dir, embedder.dimension)
-    bm25 = BM25Index(config.fts_db_path)
-    searcher = Searcher(embedder, vector_store, bm25)
+    try:
+        embedder = Embedder(config.model_name)
+        vector_store = VectorStore(config.chroma_dir, embedder.dimension)
+        bm25 = BM25Index(config.fts_db_path)
+        searcher = Searcher(embedder, vector_store, bm25)
 
-    if hybrid:
-        results = searcher.hybrid_search(query, limit=limit)
-    else:
-        results = searcher.vector_search(query, limit=limit)
+        if hybrid:
+            results = searcher.hybrid_search(query, limit=limit)
+        else:
+            results = searcher.vector_search(query, limit=limit)
 
-    bm25.close()
-    output = format_results(results, output_json=json_out)
-    if output.strip():
-        click.echo(output)
-    else:
-        click.echo("No results found.")
+        bm25.close()
+        output = format_results(results, output_json=json_out)
+        if output.strip():
+            click.echo(output)
+        else:
+            click.echo("No results found.")
+    except ModelDownloadError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        click.echo("Check your internet connection and try again.", err=True)
+        ctx.exit(1)
