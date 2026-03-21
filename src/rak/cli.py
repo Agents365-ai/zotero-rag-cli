@@ -54,6 +54,8 @@ def index(ctx: click.Context, limit: int) -> None:
         count = index_items(items, embedder, vector_store, bm25, on_progress)
         bm25.close()
         click.echo(format_index_stats(count, output_json=json_out))
+        from rak.metadata import save_metadata
+        save_metadata(config.data_dir, config.model_name, count)
     except EmptyLibraryError as exc:
         click.echo(str(exc))
         ctx.exit(0)
