@@ -1,0 +1,34 @@
+from __future__ import annotations
+
+import json
+from io import StringIO
+
+from rich.console import Console
+from rich.table import Table
+
+from rak.searcher import SearchResult
+
+
+def format_results(results: list[SearchResult], output_json: bool = False) -> str:
+    if output_json:
+        return json.dumps(
+            [{"key": r.doc_id, "title": r.title, "score": round(r.score, 4), "source": r.source} for r in results],
+            indent=2, ensure_ascii=False,
+        )
+    buf = StringIO()
+    console = Console(file=buf, force_terminal=False, width=120)
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Key", style="cyan", width=10)
+    table.add_column("Title", width=60)
+    table.add_column("Score", width=8, justify="right")
+    table.add_column("Source", width=10)
+    for r in results:
+        table.add_row(r.doc_id, r.title, f"{r.score:.3f}", r.source)
+    console.print(table)
+    return buf.getvalue()
+
+
+def format_index_stats(count: int, output_json: bool = False) -> str:
+    if output_json:
+        return json.dumps({"indexed": count})
+    return f"Indexed {count} papers."
