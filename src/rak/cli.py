@@ -98,6 +98,34 @@ def status(ctx: click.Context) -> None:
 
 
 @main.command()
+@click.option("--yes", is_flag=True, help="Skip confirmation prompt")
+@click.pass_context
+def clear(ctx: click.Context, yes: bool) -> None:
+    """Delete all indexes and reset."""
+    import shutil
+    from rak.metadata import META_FILENAME
+
+    config: RakConfig = ctx.obj["config"]
+    targets = [config.chroma_dir, config.fts_db_path, config.data_dir / META_FILENAME]
+    exists = [t for t in targets if t.exists()]
+
+    if not exists:
+        click.echo("Nothing to clear.")
+        return
+
+    if not yes:
+        click.confirm("Delete all indexes?", abort=True)
+
+    for target in exists:
+        if target.is_dir():
+            shutil.rmtree(target)
+        else:
+            target.unlink()
+
+    click.echo("Cleared all indexes.")
+
+
+@main.command()
 @click.argument("query")
 @click.option("--hybrid", is_flag=True, help="Use hybrid search (vector + BM25)")
 @click.option("--limit", default=10, help="Number of results")

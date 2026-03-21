@@ -128,3 +128,41 @@ def test_status_json_output(tmp_path: Path):
     data = json_mod.loads(result.output)
     assert data["item_count"] == 100
     assert data["model_name"] == "all-MiniLM-L6-v2"
+
+
+def test_clear_with_yes(tmp_path: Path):
+    from rak.config import RakConfig
+    # Create fake index files
+    (tmp_path / "chroma").mkdir()
+    (tmp_path / "fts.sqlite").touch()
+    save_metadata(tmp_path, model_name="test", item_count=10)
+
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+    with patch("rak.cli.RakConfig", return_value=fake_config):
+        result = runner.invoke(main, ["clear", "--yes"])
+    assert result.exit_code == 0
+    assert "Cleared" in result.output
+    assert not (tmp_path / "chroma").exists()
+    assert not (tmp_path / "fts.sqlite").exists()
+    assert not (tmp_path / "meta.json").exists()
+
+
+def test_clear_nothing_to_clear(tmp_path: Path):
+    from rak.config import RakConfig
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+    with patch("rak.cli.RakConfig", return_value=fake_config):
+        result = runner.invoke(main, ["clear", "--yes"])
+    assert result.exit_code == 0
+    assert "Nothing to clear" in result.output
+
+
+def test_clear_prompts_without_yes(tmp_path: Path):
+    from rak.config import RakConfig
+    (tmp_path / "chroma").mkdir()
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+    with patch("rak.cli.RakConfig", return_value=fake_config):
+        result = runner.invoke(main, ["clear"], input="n\n")
+    assert (tmp_path / "chroma").exists()  # not deleted because user said no
