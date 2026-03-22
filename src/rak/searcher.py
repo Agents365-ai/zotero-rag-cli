@@ -23,6 +23,7 @@ def rrf_fuse(
 ) -> list[SearchResult]:
     scores: dict[str, float] = {}
     titles: dict[str, str] = {}
+    snippets: dict[str, str] = {}
     for ranked_list in ranked_lists:
         for rank, item in enumerate(ranked_list):
             doc_id = item["id"]
@@ -31,9 +32,14 @@ def rrf_fuse(
                 titles[doc_id] = item["metadata"]["title"]
             elif "title" in item:
                 titles[doc_id] = item["title"]
+            if doc_id not in snippets and item.get("document"):
+                snippets[doc_id] = item["document"]
     sorted_ids = sorted(scores, key=lambda x: scores[x], reverse=True)[:limit]
     return [
-        SearchResult(doc_id=doc_id, score=scores[doc_id], title=titles.get(doc_id, ""), source="fused")
+        SearchResult(
+            doc_id=doc_id, score=scores[doc_id], title=titles.get(doc_id, ""),
+            source="fused", snippet=snippets.get(doc_id, ""),
+        )
         for doc_id in sorted_ids
     ]
 
@@ -103,4 +109,5 @@ class Searcher:
         where = build_where_filter(collection, tags)
         vector_results = self._vector_store.search(embedding, limit=limit * 3, where=where)
         bm25_results = self._bm25.search(query, limit=limit * 2)
-        return rrf_fuse([vector_results, bm25_results], limit=limit)
+        fused = rrf_fuse([vector_results, bm25_results], limit=limit * 3)
+        return _deduplicate_chunks(fused)[:limit]

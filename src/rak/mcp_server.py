@@ -9,12 +9,18 @@ from rak.config import RakConfig
 
 mcp = FastMCP("rak")
 
+_cached_searcher: tuple | None = None
+
 
 def _get_config() -> RakConfig:
     return RakConfig()
 
 
 def _init_searcher(config: RakConfig):
+    global _cached_searcher
+    if _cached_searcher is not None:
+        return _cached_searcher
+
     from rak.bm25 import BM25Index
     from rak.embedder import Embedder
     from rak.searcher import Searcher
@@ -24,7 +30,8 @@ def _init_searcher(config: RakConfig):
     vector_store = VectorStore(config.chroma_dir, embedder.dimension)
     bm25 = BM25Index(config.fts_db_path)
     searcher = Searcher(embedder, vector_store, bm25)
-    return searcher, vector_store, bm25
+    _cached_searcher = (searcher, vector_store, bm25)
+    return _cached_searcher
 
 
 @mcp.tool()
@@ -50,8 +57,6 @@ def search_papers(query: str, limit: int = 10, hybrid: bool = False,
         results = searcher.hybrid_search(query, limit=limit, collection=collection, tags=tag_list)
     else:
         results = searcher.vector_search(query, limit=limit, collection=collection, tags=tag_list)
-
-    bm25.close()
 
     output = []
     for r in results:

@@ -68,7 +68,7 @@ def index(ctx: click.Context, limit: int, full: bool) -> None:
             if full:
                 vector_store.clear()
                 bm25.clear()
-            count = index_items(items, embedder, vector_store, bm25, on_progress, storage_dir=storage_dir)
+            count = index_items(items, embedder, vector_store, bm25, on_progress, storage_dir=storage_dir, chunk_size=config.chunk_size, chunk_overlap=config.chunk_overlap)
             new_registry = {}
             for item in items:
                 key = item.get("key", "")
@@ -87,7 +87,7 @@ def index(ctx: click.Context, limit: int, full: bool) -> None:
             bm25.close()
             click.echo(format_index_stats(count, output_json=json_out))
         else:
-            result = index_items(items, embedder, vector_store, bm25, on_progress, registry=registry, storage_dir=storage_dir)
+            result = index_items(items, embedder, vector_store, bm25, on_progress, registry=registry, storage_dir=storage_dir, chunk_size=config.chunk_size, chunk_overlap=config.chunk_overlap)
             save_registry(config.data_dir, result["registry"])
             bm25.close()
             click.echo(format_incremental_stats(result, output_json=json_out))
@@ -288,7 +288,7 @@ def ask(
 
         context = []
         for r in results:
-            doc_data = vector_store._collection.get(ids=[r.doc_id], include=["documents"])
+            doc_data = vector_store.get(ids=[r.doc_id], include=["documents"])
             doc_text = doc_data["documents"][0] if doc_data["documents"] else ""
             context.append({
                 "key": r.doc_id,
@@ -372,7 +372,7 @@ def export(
 
         export_rows = []
         for r in results:
-            doc_data = vector_store._collection.get(ids=[r.doc_id], include=["metadatas"])
+            doc_data = vector_store.get(ids=[r.doc_id], include=["metadatas"])
             meta = doc_data["metadatas"][0] if doc_data["metadatas"] else {}
             export_rows.append({
                 "key": r.doc_id,

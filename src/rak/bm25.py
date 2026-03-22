@@ -27,7 +27,10 @@ class BM25Index:
         self._conn.commit()
 
     def search(self, query: str, limit: int = 10) -> list[dict]:
-        safe_query = " ".join(f'"{token}"' for token in query.split() if token.strip())
+        safe_query = " ".join(
+            f'"{token.replace(chr(34), "")}"'
+            for token in query.split() if token.strip() and token.replace('"', '')
+        )
         if not safe_query:
             return []
         try:

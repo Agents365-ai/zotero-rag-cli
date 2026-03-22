@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from collections.abc import Iterator
 
 from rak.llm import LLMClient, SYSTEM_PROMPT
@@ -54,7 +53,7 @@ class ChatSession:
         for r in results:
             doc_text = ""
             if vector_store:
-                doc_data = vector_store._collection.get(ids=[r.doc_id], include=["documents"])
+                doc_data = vector_store.get(ids=[r.doc_id], include=["documents"])
                 doc_text = doc_data["documents"][0] if doc_data["documents"] else ""
             self.context.append({
                 "key": r.doc_id,

@@ -39,7 +39,8 @@ def build_document_text(item: dict, pdf_text: str = "") -> str:
 
 
 def diff_items(
-    items: list[dict], registry: dict[str, str]
+    items: list[dict], registry: dict[str, str],
+    storage_dir: Path | None = None,
 ) -> tuple[list[dict], list[dict], list[str]]:
     to_add = []
     to_update = []
@@ -49,7 +50,12 @@ def diff_items(
         if not key:
             continue
         fetched_keys.add(key)
-        text = build_document_text(item)
+        pdf_text = ""
+        if storage_dir:
+            pdf_path = find_pdf(storage_dir, key)
+            if pdf_path:
+                pdf_text = extract_pdf_text(pdf_path)
+        text = build_document_text(item, pdf_text=pdf_text)
         if not text.strip():
             continue
         content_hash = compute_hash(text)
@@ -84,10 +90,12 @@ def index_items(
     on_progress: callable | None = None,
     registry: dict[str, str] | None = None,
     storage_dir: Path | None = None,
+    chunk_size: int = 512,
+    chunk_overlap: int = 64,
 ) -> dict[str, int] | int:
     if registry is not None:
-        return _index_incremental(items, embedder, vector_store, bm25_index, on_progress, registry, storage_dir)
-    return _index_full(items, embedder, vector_store, bm25_index, on_progress, storage_dir)
+        return _index_incremental(items, embedder, vector_store, bm25_index, on_progress, registry, storage_dir, chunk_size, chunk_overlap)
+    return _index_full(items, embedder, vector_store, bm25_index, on_progress, storage_dir, chunk_size, chunk_overlap)
 
 
 def _delete_chunks(vector_store: VectorStore, key: str) -> None:
@@ -96,9 +104,7 @@ def _delete_chunks(vector_store: VectorStore, key: str) -> None:
     vector_store.delete([key])
     # Delete any chunks (query by parent_key metadata)
     try:
-        results = vector_store._collection.get(
-            where={"parent_key": key}, include=[]
-        )
+        results = vector_store.get_by_metadata(where={"parent_key": key})
         if results["ids"]:
             vector_store.delete(results["ids"])
     except Exception:
@@ -127,6 +133,8 @@ def _index_full(
     bm25_index: BM25Index,
     on_progress: callable | None = None,
     storage_dir: Path | None = None,
+    chunk_size: int = 512,
+    chunk_overlap: int = 64,
 ) -> int:
     count = 0
     for i, item in enumerate(items):
@@ -145,7 +153,7 @@ def _index_full(
         # Store full document for BM25
         bm25_index.add(key, text)
         # Store chunks (or whole doc if short) in vector store
-        chunks = chunk_text(text)
+        chunks = chunk_text(text, chunk_size=chunk_size, overlap=chunk_overlap)
         if len(chunks) <= 1:
             embedding = embedder.embed(text)
             vector_store.add(ids=[key], embeddings=[embedding], documents=[text], metadatas=[metadata])
@@ -167,10 +175,12 @@ def _index_incremental(
     vector_store: VectorStore,
     bm25_index: BM25Index,
     on_progress: callable | None = None,
-    registry: dict[str, str] = None,
+    registry: dict[str, str] | None = None,
     storage_dir: Path | None = None,
+    chunk_size: int = 512,
+    chunk_overlap: int = 64,
 ) -> dict[str, int]:
-    to_add, to_update, to_remove = diff_items(items, registry)
+    to_add, to_update, to_remove = diff_items(items, registry, storage_dir=storage_dir)
     new_registry = dict(registry)
     added = 0
     updated = 0
@@ -191,7 +201,7 @@ def _index_incremental(
             bm25_index.delete(key)
             _delete_chunks(vector_store, key)
         bm25_index.add(key, text)
-        chunks = chunk_text(text)
+        chunks = chunk_text(text, chunk_size=chunk_size, overlap=chunk_overlap)
         if len(chunks) <= 1:
             embedding = embedder.embed(text)
             vector_store.add(ids=[key], embeddings=[embedding], documents=[text], metadatas=[metadata])

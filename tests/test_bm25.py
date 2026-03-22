@@ -54,3 +54,9 @@ def test_delete(bm25):
     assert bm25.count() == 2
     bm25.delete("A1")
     assert bm25.count() == 1
+
+
+def test_search_query_with_quotes(bm25):
+    bm25.add("A1", "he said hello world")
+    results = bm25.search('he said "hello"', limit=5)
+    assert isinstance(results, list)

@@ -44,6 +44,14 @@ class VectorStore:
     def count(self) -> int:
         return self._collection.count()
 
+    def get(self, ids: list[str], include: list[str] | None = None) -> dict:
+        """Retrieve documents/metadatas by IDs."""
+        return self._collection.get(ids=ids, include=include or ["documents"])
+
+    def get_by_metadata(self, where: dict) -> dict:
+        """Query documents by metadata filter."""
+        return self._collection.get(where=where, include=[])
+
     def has(self, doc_id: str) -> bool:
         result = self._collection.get(ids=[doc_id], include=[])
         return len(result["ids"]) > 0

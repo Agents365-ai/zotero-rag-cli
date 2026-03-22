@@ -85,6 +85,22 @@ def test_deduplicate_chunks_merges_same_parent():
     assert deduped[0].snippet == "best chunk"
 
 
+def test_rrf_fuse_preserves_snippets():
+    vector_results = [
+        {"id": "A", "score": 0.9, "document": "snippet text A"},
+        {"id": "B", "score": 0.7, "document": "snippet text B"},
+    ]
+    bm25_results = [
+        {"id": "B", "score": 5.0},
+        {"id": "C", "score": 3.0},
+    ]
+    fused = rrf_fuse([vector_results, bm25_results], limit=3)
+    snippets = {r.doc_id: r.snippet for r in fused}
+    assert snippets["A"] == "snippet text A"
+    assert snippets["B"] == "snippet text B"
+    assert snippets["C"] == ""
+
+
 def test_deduplicate_chunks_no_chunks():
     results = [
         SearchResult(doc_id="A", score=0.9, title="Paper", source="vector"),
