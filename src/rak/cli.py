@@ -51,6 +51,12 @@ def index(ctx: click.Context, limit: int, full: bool) -> None:
         vector_store = VectorStore(config.chroma_dir, embedder.dimension)
         bm25 = BM25Index(config.fts_db_path)
 
+        storage_dir = config.zotero_storage_dir
+        if storage_dir:
+            click.echo(f"PDF extraction enabled: {storage_dir}")
+        else:
+            click.echo("PDF extraction: Zotero storage not found, indexing metadata only.")
+
         def on_progress(current: int, total: int) -> None:
             click.echo(f"  Indexed {current}/{total}...")
 
@@ -62,20 +68,26 @@ def index(ctx: click.Context, limit: int, full: bool) -> None:
             if full:
                 vector_store.clear()
                 bm25.clear()
-            count = index_items(items, embedder, vector_store, bm25, on_progress)
+            count = index_items(items, embedder, vector_store, bm25, on_progress, storage_dir=storage_dir)
             new_registry = {}
             for item in items:
                 key = item.get("key", "")
                 if not key:
                     continue
-                text = build_document_text(item)
+                pdf_text = ""
+                if storage_dir:
+                    from rak.pdf import find_pdf, extract_pdf_text
+                    pdf_path = find_pdf(storage_dir, key)
+                    if pdf_path:
+                        pdf_text = extract_pdf_text(pdf_path)
+                text = build_document_text(item, pdf_text=pdf_text)
                 if text.strip():
                     new_registry[key] = compute_hash(text)
             save_registry(config.data_dir, new_registry)
             bm25.close()
             click.echo(format_index_stats(count, output_json=json_out))
         else:
-            result = index_items(items, embedder, vector_store, bm25, on_progress, registry=registry)
+            result = index_items(items, embedder, vector_store, bm25, on_progress, registry=registry, storage_dir=storage_dir)
             save_registry(config.data_dir, result["registry"])
             bm25.close()
             click.echo(format_incremental_stats(result, output_json=json_out))
