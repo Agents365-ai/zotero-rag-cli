@@ -1,20 +1,47 @@
-# rak — RAG Knowledge Search for Zotero
+# rak — RAG Semantic Search for Zotero
 
 [中文](README.md)
 
-Semantic and hybrid search over your Zotero library, powered by local embeddings. Ask questions with a local LLM. Everything runs locally — no API keys needed for search.
+`rak` is a RAG-based semantic search tool for Zotero libraries. It vectorizes papers using local embedding models, supports semantic and hybrid search, and returns the most relevant papers with matched text snippets.
 
-### Three Working Modes
+## Core Concept
 
-| Mode | Command | For Whom | Use Case | LLM Required? |
-|------|---------|----------|----------|:---:|
-| **Search** | `rak search` / `rak export` | AI assistants / scripts | Retrieve paper data, `--json` output for programs | No |
-| **Ask** | `rak ask` | Humans | Quick one-off question, get answer and go | Yes |
-| **Chat** | `rak chat` | Humans | Deep multi-turn discussion over papers | Yes |
+**rak does one thing: semantic retrieval.** It finds the most relevant papers and matching text snippets, then hands them to the caller (Claude Code / LM Studio / human) to decide what to do next.
 
-- **Search mode**: Pure local vector/keyword retrieval, fully offline, no API key needed. Claude Code uses `rak --json search` to get structured paper data
-- **Ask mode**: Search + LLM answer in one shot. For quick questions in the terminal — use it like a search engine, get your answer and move on
-- **Chat mode**: Search + LLM multi-turn conversation with context history. For sitting down and exploring papers in depth, with follow-up questions, `/search` to switch topics, `/tokens` to track usage
+```mermaid
+graph LR
+    A[User Query] --> B[rak Semantic Search]
+    B --> C[Paper Metadata + Matched Snippets]
+    C --> D1[Claude Code<br/>Analyze & Summarize]
+    C --> D2[LM Studio<br/>MCP Tool Call]
+    C --> D3[Terminal User<br/>ask / chat Q&A]
+```
+
+## Three Usage Modes
+
+```mermaid
+graph TD
+    subgraph "Search Mode — For AI / Scripts"
+        S1[rak search] --> S2[Returns titles + snippets]
+        S2 --> S3[Claude Code / scripts]
+    end
+
+    subgraph "Ask Mode — For humans, one-shot"
+        A1[rak ask] --> A2[Retrieve papers]
+        A2 --> A3[LLM generates answer]
+    end
+
+    subgraph "Chat Mode — For humans, multi-turn"
+        C1[rak chat] --> C2[Retrieve papers]
+        C2 --> C3[Multi-turn conversation]
+    end
+```
+
+| Mode | Command | For Whom | LLM Required? |
+|------|---------|----------|:---:|
+| **Search** | `rak search` | AI assistants / scripts | No |
+| **Ask** | `rak ask` | Humans (quick terminal Q&A) | Yes |
+| **Chat** | `rak chat` | Humans (deep discussion) | Yes |
 
 ## Install
 
@@ -24,27 +51,53 @@ uv tool install zotero-rag-cli
 
 # Or
 pip install zotero-rag-cli
+
+# For MCP Server (LM Studio / Cursor)
+pip install zotero-rag-cli[mcp]
 ```
 
-Requires `zot` ([zotero-cli-cc](https://github.com/Agents365-ai/zotero-cli-cc)) to be installed and working.
+Requires [`zot`](https://github.com/Agents365-ai/zotero-cli-cc) (Zotero CLI for fetching library data).
 
 ## Quick Start
 
 ```bash
-# 1. Index your Zotero library (incremental, auto PDF extraction + chunking)
+# 1. Index (incremental, auto PDF extraction + chunking)
 rak index
 
 # 2. Semantic search
-rak search "cell fate determination mechanisms"
+rak search "cell fate determination"
 
-# 3. Hybrid search (semantic + keyword BM25)
+# 3. Hybrid search (semantic + BM25 keywords)
 rak search "spatial transcriptomics" --hybrid
 
-# 4. Ask a question (requires Ollama or LMStudio running locally)
-rak ask "What are the main methods for single-cell clustering?"
+# 4. Terminal Q&A (requires LLM)
+rak ask "What are the main single-cell clustering methods?"
 
-# 5. Interactive multi-turn chat over your papers
+# 5. Multi-turn chat (requires LLM)
 rak chat
+```
+
+## Data Flow
+
+```mermaid
+graph TD
+    Z[zot CLI] -->|"zot --json list"| I[rak index]
+    P[PDF Full Text] --> I
+    I -->|Embed + Chunk| V[(ChromaDB<br/>Vector Store)]
+    I -->|Full Text| F[(SQLite FTS5<br/>Keyword Index)]
+
+    Q[User Query] --> E[Embedder]
+    E --> VS[Vector Search]
+    Q --> BS[BM25 Search]
+    V --> VS
+    F --> BS
+    VS --> RRF[RRF Fusion]
+    BS -->|"--hybrid"| RRF
+    RRF --> R[Results<br/>Metadata + Snippets]
+
+    R --> OUT1[CLI / JSON Output]
+    R --> OUT2[LLM Q&A<br/>ask / chat]
+    R --> OUT3[MCP Server<br/>LM Studio etc.]
 ```
 
 ## Commands
@@ -52,127 +105,139 @@ rak chat
 ### Index
 
 ```bash
-rak index                    # Incremental index (only new/changed items)
-rak index --full             # Force full rebuild
-rak index --limit 500        # Limit items fetched from zot
+rak index                    # Incremental (new/changed only)
+rak index --full             # Full rebuild
+rak index --limit 500        # Limit items
 ```
 
-Automatically extracts PDF full text from `~/Zotero/storage/` if available. Long documents are split into overlapping chunks (512 words, 64 overlap) for better Q&A accuracy.
+Auto-extracts PDF full text from `~/Zotero/storage/`, splits long documents into overlapping chunks (512 words, 64 overlap).
 
 ### Search
 
 ```bash
 rak search "single cell RNA sequencing methods"
-rak search "CRISPR off-target effects" --hybrid
-rak search "attention mechanism" --limit 5
+rak search "CRISPR off-target" --hybrid
+rak search "attention" --limit 5
 rak search "RNA-seq" --collection "My Papers" --tag "methods"
-rak --json search "spatial omics"
+rak --json search "spatial omics"       # JSON output (with snippets)
 ```
 
-### Ask (LLM Q&A)
+`--json` output example:
+
+```json
+[
+  {
+    "key": "ABC123",
+    "title": "Attention Is All You Need",
+    "score": 0.89,
+    "source": "vector",
+    "snippet": "We propose a new simple network architecture..."
+  }
+]
+```
+
+### Ask
 
 ```bash
 rak ask "What are the main findings about cell fate?"
 rak ask "Compare CRISPR methods" --context 10 --hybrid
-rak ask "Summarize spatial omics" --llm-model mistral --llm-url http://localhost:1234/v1
 ```
 
-Requires an LLM service. Supports local (Ollama, LMStudio, vLLM) or cloud (DeepSeek, OpenAI, any OpenAI-compatible API).
-
-### Chat (Multi-turn Q&A)
+### Chat
 
 ```bash
 rak chat                                # Start interactive session
-rak chat --hybrid --context 10          # With hybrid search and more context
-rak chat --collection "My Papers"       # Filtered to a collection
+rak chat --hybrid --context 10          # Hybrid + more context
+rak chat --collection "My Papers"       # Filter by collection
 ```
 
-Interactive REPL for multi-turn conversations over your papers. Maintains conversation history across turns. Commands inside chat:
-
-| Command | Purpose |
-|---------|---------|
-| `/search <query>` | Retrieve new papers and reset conversation |
-| `/context` | Show current paper list |
-| `/tokens` | Show estimated token usage and turn count |
-| `/help` | Show available commands |
-| `/quit` | Exit chat session |
+Chat commands: `/search <query>` · `/context` · `/tokens` · `/help` · `/quit`
 
 ### Export
 
 ```bash
-rak export "single cell" --format csv                    # CSV to stdout
-rak export "CRISPR" --format bibtex --output refs.bib    # BibTeX to file
-rak export "RNA-seq" --hybrid --collection "Methods"     # With filters
+rak export "single cell" --format csv
+rak export "CRISPR" --format bibtex --output refs.bib
 ```
 
 ### Config
 
 ```bash
-rak config                           # Show all settings
-rak config llm_model mistral         # Set LLM model persistently
-rak config llm_base_url http://localhost:1234/v1
-rak config llm_api_key sk-xxx        # Set API key (for cloud LLMs)
+rak config                              # Show all settings
+rak config llm_model deepseek-chat      # Set LLM model
+rak config llm_base_url https://api.deepseek.com
+rak config llm_api_key sk-xxx           # Set API key
 ```
 
-#### LLM Configuration Examples
+<details>
+<summary>LLM Configuration Examples</summary>
 
 ```bash
-# DeepSeek (recommended cloud option)
+# DeepSeek (recommended cloud)
 rak config llm_base_url https://api.deepseek.com
 rak config llm_model deepseek-chat
-rak config llm_api_key sk-your-deepseek-key
+rak config llm_api_key sk-your-key
 
 # OpenAI
 rak config llm_base_url https://api.openai.com/v1
 rak config llm_model gpt-4o
-rak config llm_api_key sk-your-openai-key
+rak config llm_api_key sk-your-key
 
-# Local Ollama (default, no API key needed)
+# Local Ollama (default)
 rak config llm_base_url http://localhost:11434/v1
 rak config llm_model llama3
 rak config llm_api_key not-needed
 ```
 
-### Status & Clear
+</details>
+
+### Other
 
 ```bash
-rak status                  # Show index stats (item count, model, last indexed)
-rak clear                   # Delete all indexes (with confirmation)
-rak clear --yes             # Skip confirmation
+rak status                  # Index status
+rak clear --yes             # Clear all indexes
+rak completion zsh           # Shell completions
+eval "$(rak completion)"    # Enable completions
 ```
 
-### Shell Completions
+## Using with Claude Code
 
-```bash
-rak completion bash          # Generate bash completions
-rak completion zsh           # Generate zsh completions
-rak completion fish          # Generate fish completions
-rak completion               # Auto-detect shell
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant C as Claude Code
+    participant R as rak
+    participant Z as zot
 
-# Enable completions (add to your shell profile):
-eval "$(rak completion)"
+    U->>C: Find attention papers and summarize
+    C->>R: rak --json search "attention"
+    R-->>C: [{key, title, score, snippet}, ...]
+    C->>C: Analyze snippets directly
+    C-->>U: Summary + paper list
+
+    U->>C: Show me details of the first one
+    C->>Z: zot read ABC123
+    Z-->>C: Full metadata + abstract
+    C-->>U: Paper details
 ```
 
-## MCP Server (LM Studio / Cursor / Claude Desktop)
+Claude Code IS the LLM — no need for `rak ask`. Use `rak search` to get snippets, then Claude analyzes directly.
 
-`rak` includes a built-in MCP Server for tools that support the MCP protocol.
+Add to `~/.claude/CLAUDE.md`:
 
-### Install
+```markdown
+### Zotero
+- Semantic search: `rak --json search`, exact search/CRUD: `zot`
+- `rak` returns matched snippets, analyze directly without reading full papers
+```
+
+## MCP Server
+
+For LM Studio / Cursor / Claude Desktop.
 
 ```bash
 pip install zotero-rag-cli[mcp]
 ```
-
-### Available Tools
-
-| Tool | Purpose |
-|------|---------|
-| `search_papers` | Semantic/hybrid search, returns paper titles and scores |
-| `index_status` | Show index status |
-
-### Configuration
-
-Add to your MCP config (LM Studio / Cursor / Claude Desktop):
 
 ```json
 {
@@ -184,156 +249,82 @@ Add to your MCP config (LM Studio / Cursor / Claude Desktop):
 }
 ```
 
-The LLM in LM Studio / Cursor receives search results and handles Q&A on its own.
+| Tool | Purpose |
+|------|---------|
+| `search_papers` | Semantic/hybrid search, returns metadata + snippets |
+| `index_status` | Show index status |
 
-## Comparison with Similar Tools
+## Using with zot
+
+```mermaid
+graph LR
+    subgraph "zot — CRUD"
+        Z1[Exact Search]
+        Z2[Read Papers]
+        Z3[Notes / Tags]
+        Z4[Add / Delete]
+    end
+
+    subgraph "rak — RAG Retrieval"
+        R1[Semantic Search]
+        R2[Hybrid Search]
+        R3[Ask / Chat]
+    end
+
+    Z1 -.->|"Complementary"| R1
+```
+
+| Tool | Role | When to Use |
+|------|------|-------------|
+| `zot` | Zotero CRUD (search, read, notes, tags, export) | You know what you're looking for |
+| `rak` | RAG semantic retrieval + Q&A | Exploratory search, AI-assisted analysis |
+
+## Options Reference
+
+| Option | Commands | Description |
+|--------|----------|-------------|
+| `--json` | Global | JSON output (with snippets) |
+| `--hybrid` | search, ask, chat, export | Hybrid search |
+| `--limit N` | search, export | Number of results |
+| `--collection` | search, ask, chat, export | Filter by collection |
+| `--tag` | search, ask, chat, export | Filter by tag (repeatable, OR) |
+| `--full` | index | Full rebuild |
+| `--context N` | ask, chat | Context documents |
+| `--llm-model` | ask, chat | LLM model |
+| `--llm-url` | ask, chat | LLM server URL |
+| `--format` | export | csv / bibtex |
+| `--output` | export | Output file |
+
+## Comparison
 
 | Feature | **rak** | [zotero-mcp](https://github.com/54yyyu/zotero-mcp) | [cookjohn/zotero-mcp](https://github.com/cookjohn/zotero-mcp) | [ZoteroBridge](https://github.com/Combjellyshen/ZoteroBridge) |
 |---|:---:|:---:|:---:|:---:|
-| **Semantic Search** | **✅** | ✅ | ✅ | ❌ |
-| **Hybrid Search (Vector + BM25)** | **✅** | ❌ | ❌ | ❌ |
-| **PDF Chunking** | **✅** | ❌ | ❌ | ❌ |
-| **LLM Q&A** | **✅ Local** | Cloud API | Cloud API | Cloud API |
-| **Multi-turn Chat** | **✅** | ❌ | ❌ | ❌ |
-| **Streaming Responses** | **✅** | ❌ | ❌ | ❌ |
-| **100% Local / No API Keys** | **✅** | ❌ | ❌ | ❌ |
-| **CLI Terminal Use** | **✅** | ❌ | ❌ | ❌ |
-| **MCP Protocol** | **✅** | ✅ | ✅ | ✅ |
-| **Collection/Tag Filters** | **✅** | ✅ | ✅ | ✅ |
-| **BibTeX/CSV Export** | **✅** | ❌ | ❌ | ❌ |
-| **Incremental Indexing** | **✅** | N/A | N/A | N/A |
-| **Shell Completions** | **✅** | ❌ | ❌ | ❌ |
-| **JSON Output** | **✅** | N/A | N/A | N/A |
-| **AI Coding Assistant** | **✅ Claude Code** | Claude/ChatGPT | Claude/Cursor | Claude/Cursor |
-| **Language** | Python | Python | TypeScript | TypeScript |
-| **Active** | ✅ 2026 | ✅ 2026 | ✅ 2026 | ✅ 2026 |
+| Semantic Search | **✅** | ✅ | ✅ | ❌ |
+| Hybrid Search (Vector + BM25) | **✅** | ❌ | ❌ | ❌ |
+| PDF Chunking | **✅** | ❌ | ❌ | ❌ |
+| Snippet Return | **✅** | ❌ | ❌ | ❌ |
+| LLM Q&A | **✅** Local/Cloud | Cloud API | Cloud API | Cloud API |
+| Multi-turn Chat | **✅** | ❌ | ❌ | ❌ |
+| 100% Local | **✅** | ❌ | ❌ | ❌ |
+| CLI Terminal | **✅** | ❌ | ❌ | ❌ |
+| MCP Protocol | **✅** | ✅ | ✅ | ✅ |
+| Incremental Index | **✅** | N/A | N/A | N/A |
 
 ### Why rak?
 
-> **The only CLI tool that provides local semantic search, hybrid retrieval, and LLM Q&A over your Zotero library — all without API keys or cloud services.**
+> **The only Zotero RAG tool with CLI + MCP, local semantic search, and snippet-level retrieval.**
 
-- **Local**: All computation runs on your machine — embeddings, search, LLM
-- **Fast**: Incremental indexing, millisecond vector search
-- **Accurate**: PDF chunking + hybrid search (semantic + BM25 with RRF fusion)
-- **Private**: Your papers never leave your machine
-- **AI-Native**: Built for Claude Code, `--json` output for AI consumption
-- **Terminal-Native**: Full CLI with shell completions, MCP tools can't run in terminal
+- **Precise**: PDF chunking + hybrid search + returns matched snippets, not entire papers
+- **Local**: Embedding and search run on your machine, no API key for search mode
+- **Flexible**: CLI for terminal and Claude Code, MCP for LM Studio and Cursor
+- **Private**: Paper data never leaves your machine
 
-## Architecture
+## Related Projects
 
-```
-┌─────────────────────────────────────┐
-│          rak CLI (Click)            │
-│ index│search│ask│chat│export│config │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────▼──────────────────────┐
-│           Core Pipeline             │
-│  Embedder (sentence-transformers)   │
-│  + PDF Extractor + Text Chunker    │
-└───────┬────────────────┬────────────┘
-        │                │
-   ┌────▼────┐    ┌──────▼──────┐
-   │ChromaDB │    │ SQLite FTS5 │
-   │(vectors)│    │  (keywords) │
-   └────┬────┘    └──────┬──────┘
-        │                │
-   ┌────▼────────────────▼────┐
-   │  Searcher (RRF Fusion)   │
-   └────────────┬─────────────┘
-                │
-   ┌────────────▼─────────────┐
-   │  Local LLM (Ollama/etc)  │
-   │  ask / chat / stream     │
-   └──────────────────────────┘
-```
-
-Data flows from `zot` CLI → indexer → embedder + PDF extractor → ChromaDB + BM25 → searcher → formatter / LLM.
-
-## Options
-
-| Flag | Commands | Purpose |
-|------|----------|---------|
-| `--json` | Global | JSON output |
-| `--model NAME` | Global | Embedding model (default: all-MiniLM-L6-v2) |
-| `--hybrid` | search, ask, chat, export | Enable hybrid search (vector + BM25) |
-| `--limit N` | search, export | Number of results (default: 10) |
-| `--collection NAME` | search, ask, chat, export | Filter by Zotero collection |
-| `--tag TAG` | search, ask, chat, export | Filter by tag (repeatable, OR logic) |
-| `--full` | index | Force full rebuild |
-| `--context N` | ask, chat | Number of context documents (default: 5) |
-| `--llm-model NAME` | ask, chat | Override LLM model |
-| `--llm-url URL` | ask, chat | Override LLM server URL |
-| `--format csv\|bibtex` | export | Export format (default: csv) |
-| `--output FILE` | export | Write to file instead of stdout |
-
-## Embedding Models
-
-| Model | Size | Best For |
-|-------|------|----------|
-| `all-MiniLM-L6-v2` (default) | ~80MB | English papers, fast |
-| `nomic-ai/nomic-embed-text-v1.5` | ~270MB | Multilingual, more accurate |
-
-Switch model:
-```bash
-rak --model nomic-ai/nomic-embed-text-v1.5 index --full
-rak --model nomic-ai/nomic-embed-text-v1.5 search "query"
-```
-
-## Use with zot
-
-`rak` is designed to work alongside [`zot`](https://github.com/Agents365-ai/zotero-cli-cc):
-
-```bash
-# zot: exact keyword search + CRUD (fast, precise)
-zot search "single cell"
-zot read ABC123
-zot note ABC123 --add "Key finding: ..."
-
-# rak: semantic search + LLM Q&A (understands meaning)
-rak search "methods for analyzing individual cell transcriptomes"
-rak ask "What are the main single-cell clustering approaches?"
-
-# Best of both
-rak search "scRNA-seq clustering" --hybrid
-```
-
-| Tool | Strength | Use When |
-|------|----------|----------|
-| `zot` | Exact match, CRUD, notes, tags | You know what you're looking for |
-| `rak` | Semantic understanding, Q&A | You're exploring or asking questions |
-| Both | Hybrid search | You want comprehensive results |
-
-## Using with Claude Code
-
-In any Claude Code session, use natural language:
-
-```
-Search my Zotero for papers about transformer attention
-→ Claude runs: rak --json search "transformer attention"
-
-What do my papers say about attention efficiency?
-→ Claude runs: rak ask "What methods improve attention efficiency?"
-
-Export papers about CRISPR as BibTeX
-→ Claude runs: rak export "CRISPR" --format bibtex --output refs.bib
-```
-
-Add to `~/.claude/CLAUDE.md`:
-
-```markdown
-### Zotero RAG
-- Use `rak` for semantic search and LLM Q&A over Zotero library
-- Use `zot` for exact search, CRUD, notes, tags, exports
-- Use `--json` flag when processing results programmatically
-```
-
-### Related Projects
-
-- **[zotero-cli-cc](https://github.com/Agents365-ai/zotero-cli-cc)** — Zotero CLI for CRUD operations, required dependency for `rak`
-- **[54yyyu/zotero-mcp](https://github.com/54yyyu/zotero-mcp)** — MCP-based Zotero integration with semantic search
-- **[cookjohn/zotero-mcp](https://github.com/cookjohn/zotero-mcp)** — MCP Zotero integration for Claude/Cursor
-- **[Combjellyshen/ZoteroBridge](https://github.com/Combjellyshen/ZoteroBridge)** — Zotero Bridge for AI coding assistants
+- **[zotero-cli-cc](https://github.com/Agents365-ai/zotero-cli-cc)** — Zotero CLI for CRUD (required dependency)
+- **[54yyyu/zotero-mcp](https://github.com/54yyyu/zotero-mcp)** — MCP-based Zotero semantic search
+- **[cookjohn/zotero-mcp](https://github.com/cookjohn/zotero-mcp)** — MCP Zotero integration
+- **[Combjellyshen/ZoteroBridge](https://github.com/Combjellyshen/ZoteroBridge)** — Zotero Bridge for AI assistants
 
 ---
 
