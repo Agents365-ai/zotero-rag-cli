@@ -40,10 +40,10 @@ def search_papers(query: str, limit: int = 10, hybrid: bool = False,
         tags: Filter by tags (OR logic)
 
     Returns:
-        JSON array of search results with key, title, score, source, and full text.
+        JSON array of search results with key, title, score, and source.
     """
     config = _get_config()
-    searcher, vector_store, bm25 = _init_searcher(config)
+    searcher, _, bm25 = _init_searcher(config)
 
     tag_list = tags if tags else None
     if hybrid:
@@ -51,21 +51,12 @@ def search_papers(query: str, limit: int = 10, hybrid: bool = False,
     else:
         results = searcher.vector_search(query, limit=limit, collection=collection, tags=tag_list)
 
-    output = []
-    for r in results:
-        doc_data = vector_store._collection.get(ids=[r.doc_id], include=["documents"])
-        doc_text = doc_data["documents"][0] if doc_data["documents"] else ""
-        output.append({
-            "key": r.doc_id,
-            "title": r.title,
-            "score": round(r.score, 4),
-            "source": r.source,
-            "text": doc_text,
-        })
-
     bm25.close()
 
-    return json.dumps(output, indent=2, ensure_ascii=False)
+    return json.dumps([
+        {"key": r.doc_id, "title": r.title, "score": round(r.score, 4), "source": r.source}
+        for r in results
+    ], indent=2, ensure_ascii=False)
 
 
 @mcp.tool()

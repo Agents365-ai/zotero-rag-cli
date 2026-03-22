@@ -29,7 +29,7 @@ def test_index_status_with_index(tmp_path):
     assert data["model_name"] == "all-MiniLM-L6-v2"
 
 
-def test_search_papers_returns_json_with_text():
+def test_search_papers_returns_json():
     import json
     from rak.searcher import SearchResult
 
@@ -37,16 +37,14 @@ def test_search_papers_returns_json_with_text():
     mock_searcher.vector_search.return_value = [
         SearchResult(doc_id="A1", score=0.9, title="Paper One", source="vector"),
     ]
-    mock_store = MagicMock()
-    mock_store._collection.get.return_value = {"documents": ["Full text of paper."]}
     mock_bm25 = MagicMock()
 
     with patch("rak.mcp_server._get_config"), \
-         patch("rak.mcp_server._init_searcher", return_value=(mock_searcher, mock_store, mock_bm25)):
+         patch("rak.mcp_server._init_searcher", return_value=(mock_searcher, None, mock_bm25)):
         result = search_papers("test query", limit=5)
 
     data = json.loads(result)
     assert len(data) == 1
     assert data[0]["key"] == "A1"
     assert data[0]["title"] == "Paper One"
-    assert data[0]["text"] == "Full text of paper."
+    assert "text" not in data[0]

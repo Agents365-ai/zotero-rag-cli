@@ -167,7 +167,7 @@ pip install zotero-rag-cli[mcp]
 
 | Tool | Purpose |
 |------|---------|
-| `search_papers` | Semantic/hybrid search, returns paper titles, abstracts, and full text |
+| `search_papers` | Semantic/hybrid search, returns paper titles and scores |
 | `index_status` | Show index status |
 
 ### Configuration
@@ -184,7 +184,7 @@ Add to your MCP config (LM Studio / Cursor / Claude Desktop):
 }
 ```
 
-The LLM in LM Studio / Cursor automatically receives paper full text as context — no need for rak to call an additional LLM.
+The LLM in LM Studio / Cursor receives search results and handles Q&A on its own.
 
 ## Comparison with Similar Tools
 

@@ -176,7 +176,7 @@ pip install zotero-rag-cli[mcp]
 
 | 工具 | 功能 |
 |------|------|
-| `search_papers` | 语义/混合搜索，返回论文标题、摘要、全文 |
+| `search_papers` | 语义/混合搜索，返回论文标题、分数 |
 | `index_status` | 查看索引状态 |
 
 ### 配置
@@ -193,7 +193,7 @@ pip install zotero-rag-cli[mcp]
 }
 ```
 
-LM Studio 等工具的大模型会自动获取论文全文作为上下文来回答问题，无需 rak 再调用额外的 LLM。
+LM Studio 等工具的大模型拿到检索结果后自行判断和回答。
 
 ## 同类工具对比
 
