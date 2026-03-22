@@ -166,3 +166,9 @@ def test_clear_prompts_without_yes(tmp_path: Path):
     with patch("rak.cli.RakConfig", return_value=fake_config):
         result = runner.invoke(main, ["clear"], input="n\n")
     assert (tmp_path / "chroma").exists()  # not deleted because user said no
+
+
+def test_index_help_shows_full_flag():
+    runner = CliRunner()
+    result = runner.invoke(main, ["index", "--help"])
+    assert "--full" in result.output

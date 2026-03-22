@@ -24,13 +24,16 @@ def main(ctx: click.Context, output_json: bool, model: str | None) -> None:
 
 @main.command()
 @click.option("--limit", default=5000, help="Max items to index from zot")
+@click.option("--full", is_flag=True, help="Force full rebuild (ignore existing index)")
 @click.pass_context
-def index(ctx: click.Context, limit: int) -> None:
+def index(ctx: click.Context, limit: int, full: bool) -> None:
     """Index Zotero library for semantic search."""
     from rak.bm25 import BM25Index
     from rak.embedder import Embedder
-    from rak.formatter import format_index_stats
-    from rak.indexer import fetch_zot_items, index_items
+    from rak.formatter import format_incremental_stats, format_index_stats
+    from rak.indexer import build_document_text, fetch_zot_items, index_items
+    from rak.metadata import save_metadata
+    from rak.registry import compute_hash, load_registry, save_registry
     from rak.store import VectorStore
 
     config: RakConfig = ctx.obj["config"]
@@ -51,11 +54,33 @@ def index(ctx: click.Context, limit: int) -> None:
         def on_progress(current: int, total: int) -> None:
             click.echo(f"  Indexed {current}/{total}...")
 
-        count = index_items(items, embedder, vector_store, bm25, on_progress)
-        bm25.close()
-        click.echo(format_index_stats(count, output_json=json_out))
-        from rak.metadata import save_metadata
-        save_metadata(config.data_dir, config.model_name, count)
+        registry = None if full else load_registry(config.data_dir)
+        if registry is not None and not registry:
+            registry = None
+
+        if registry is None:
+            if full:
+                vector_store.clear()
+                bm25.clear()
+            count = index_items(items, embedder, vector_store, bm25, on_progress)
+            new_registry = {}
+            for item in items:
+                key = item.get("key", "")
+                if not key:
+                    continue
+                text = build_document_text(item)
+                if text.strip():
+                    new_registry[key] = compute_hash(text)
+            save_registry(config.data_dir, new_registry)
+            bm25.close()
+            click.echo(format_index_stats(count, output_json=json_out))
+        else:
+            result = index_items(items, embedder, vector_store, bm25, on_progress, registry=registry)
+            save_registry(config.data_dir, result["registry"])
+            bm25.close()
+            click.echo(format_incremental_stats(result, output_json=json_out))
+
+        save_metadata(config.data_dir, config.model_name, vector_store.count())
     except EmptyLibraryError as exc:
         click.echo(str(exc))
         ctx.exit(0)
@@ -104,9 +129,10 @@ def clear(ctx: click.Context, yes: bool) -> None:
     """Delete all indexes and reset."""
     import shutil
     from rak.metadata import META_FILENAME
+    from rak.registry import REGISTRY_FILENAME
 
     config: RakConfig = ctx.obj["config"]
-    targets = [config.chroma_dir, config.fts_db_path, config.data_dir / META_FILENAME]
+    targets = [config.chroma_dir, config.fts_db_path, config.data_dir / META_FILENAME, config.data_dir / REGISTRY_FILENAME]
     exists = [t for t in targets if t.exists()]
 
     if not exists:
