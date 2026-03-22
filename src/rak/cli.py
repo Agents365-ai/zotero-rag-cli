@@ -42,7 +42,7 @@ def index(ctx: click.Context, limit: int, full: bool) -> None:
 
     try:
         click.echo("Loading embedding model...")
-        embedder = Embedder(config.model_name)
+        embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
 
         click.echo("Fetching items from zot...")
         items = fetch_zot_items(config.zot_command, limit=limit)
@@ -179,6 +179,11 @@ def config_cmd(ctx: click.Context, key: str | None, value: str | None) -> None:
         click.echo(f"llm_model = {config.llm_model}")
         api_display = config.llm_api_key if config.llm_api_key == "not-needed" else config.llm_api_key[:8] + "..."
         click.echo(f"llm_api_key = {api_display}")
+        click.echo(f"embedding_provider = {config.embedding_provider}")
+        if config.embedding_provider == "api":
+            click.echo(f"embedding_base_url = {config.embedding_base_url}")
+            emb_key = config.embedding_api_key if config.embedding_api_key == "not-needed" else config.embedding_api_key[:8] + "..."
+            click.echo(f"embedding_api_key = {emb_key}")
         click.echo(f"data_dir = {config.data_dir}")
         click.echo(f"zotero_storage_dir = {config.zotero_storage_dir}")
 
@@ -202,7 +207,7 @@ def search(ctx: click.Context, query: str, hybrid: bool, limit: int, collection:
     json_out = ctx.obj["json"]
 
     try:
-        embedder = Embedder(config.model_name)
+        embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
         vector_store = VectorStore(config.chroma_dir, embedder.dimension)
         with BM25Index(config.fts_db_path) as bm25:
             searcher = Searcher(embedder, vector_store, bm25)
@@ -255,7 +260,7 @@ def ask(
     json_out = ctx.obj["json"]
 
     try:
-        embedder = Embedder(config.model_name)
+        embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
         vector_store = VectorStore(config.chroma_dir, embedder.dimension)
         with BM25Index(config.fts_db_path) as bm25:
             searcher = Searcher(embedder, vector_store, bm25)
@@ -333,7 +338,7 @@ def export(
     config: RakConfig = ctx.obj["config"]
 
     try:
-        embedder = Embedder(config.model_name)
+        embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
         vector_store = VectorStore(config.chroma_dir, embedder.dimension)
         with BM25Index(config.fts_db_path) as bm25:
             searcher = Searcher(embedder, vector_store, bm25)
@@ -431,7 +436,7 @@ def chat(
     config: RakConfig = ctx.obj["config"]
 
     try:
-        embedder = Embedder(config.model_name)
+        embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
         vector_store = VectorStore(config.chroma_dir, embedder.dimension)
         with BM25Index(config.fts_db_path) as bm25:
             searcher = Searcher(embedder, vector_store, bm25)

@@ -39,6 +39,6 @@ def test_fetch_zot_items_raises_empty_library():
 
 
 def test_embedder_raises_model_download_error():
-    with patch("rak.embedder.SentenceTransformer", side_effect=OSError("Connection refused")):
+    with patch("sentence_transformers.SentenceTransformer", side_effect=OSError("Connection refused")):
         with pytest.raises(ModelDownloadError, match="Connection refused"):
             Embedder("bad-model-name")

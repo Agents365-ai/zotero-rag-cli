@@ -145,7 +145,27 @@ rak index --full             # 全量重建
 rak index --limit 500        # 限制项目数
 ```
 
-自动从 `~/Zotero/storage/` 提取 PDF 全文，长文档分割为重叠片段（512 词，64 词重叠）。
+自动从 `~/Zotero/storage/` 提取 PDF 和 Markdown 附件全文，长文档分割为重叠片段（512 词，64 词重叠）。
+
+### 嵌入模型
+
+默认使用 `all-MiniLM-L6-v2`，支持所有 [sentence-transformers](https://huggingface.co/models?library=sentence-transformers) 模型。切换模型后需重建索引：
+
+```bash
+rak config model_name BAAI/bge-m3
+rak clear --yes && rak index
+```
+
+常用模型推荐：
+
+| 模型 | 维度 | 大小 | 适用场景 |
+|------|------|------|----------|
+| `all-MiniLM-L6-v2` (默认) | 384 | 80MB | 英文论文，速度快 |
+| `all-mpnet-base-v2` | 768 | 420MB | 英文最佳质量 |
+| `BAAI/bge-small-en-v1.5` | 384 | 130MB | 英文，性价比高 |
+| `BAAI/bge-small-zh-v1.5` | 512 | 95MB | 中文论文优化 |
+| `BAAI/bge-m3` | 1024 | 2.2GB | 多语言，最强但较慢 |
+| `intfloat/multilingual-e5-small` | 384 | 470MB | 多语言轻量 |
 
 ### 搜索
 

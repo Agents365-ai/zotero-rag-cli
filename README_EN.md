@@ -145,7 +145,27 @@ rak index --full             # Full rebuild
 rak index --limit 500        # Limit items
 ```
 
-Auto-extracts PDF full text from `~/Zotero/storage/`, splits long documents into overlapping chunks (512 words, 64 overlap).
+Auto-extracts PDF and Markdown attachments from `~/Zotero/storage/`, splits long documents into overlapping chunks (512 words, 64 overlap).
+
+### Embedding Models
+
+Default: `all-MiniLM-L6-v2`. Supports any [sentence-transformers](https://huggingface.co/models?library=sentence-transformers) model. Rebuild index after switching:
+
+```bash
+rak config model_name BAAI/bge-m3
+rak clear --yes && rak index
+```
+
+Recommended models:
+
+| Model | Dim | Size | Best for |
+|-------|-----|------|----------|
+| `all-MiniLM-L6-v2` (default) | 384 | 80MB | English, fast |
+| `all-mpnet-base-v2` | 768 | 420MB | English, best quality |
+| `BAAI/bge-small-en-v1.5` | 384 | 130MB | English, good balance |
+| `BAAI/bge-small-zh-v1.5` | 512 | 95MB | Chinese papers |
+| `BAAI/bge-m3` | 1024 | 2.2GB | Multilingual, strongest |
+| `intfloat/multilingual-e5-small` | 384 | 470MB | Multilingual, lightweight |
 
 ### Search
 

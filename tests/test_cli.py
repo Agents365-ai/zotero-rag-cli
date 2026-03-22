@@ -44,7 +44,7 @@ def test_index_empty_library():
     runner = CliRunner()
     with patch("rak.indexer.shutil.which", return_value="/usr/bin/zot"), \
          patch("rak.indexer.subprocess.run") as mock_run, \
-         patch("rak.embedder.SentenceTransformer"):
+         patch("sentence_transformers.SentenceTransformer"):
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = "[]"
         result = runner.invoke(main, ["index"])
@@ -54,7 +54,7 @@ def test_index_empty_library():
 
 def test_search_model_download_error():
     runner = CliRunner()
-    with patch("rak.embedder.SentenceTransformer", side_effect=OSError("Network error")):
+    with patch("sentence_transformers.SentenceTransformer", side_effect=OSError("Network error")):
         result = runner.invoke(main, ["search", "test query"])
     assert result.exit_code == 1
     assert "Failed to load model" in result.output
@@ -80,7 +80,7 @@ def test_index_writes_metadata(tmp_path: Path):
     fake_config = RakConfig(data_dir=tmp_path)
     with patch("rak.indexer.shutil.which", return_value="/usr/bin/zot"), \
          patch("rak.indexer.subprocess.run") as mock_run, \
-         patch("rak.embedder.SentenceTransformer") as mock_st, \
+         patch("sentence_transformers.SentenceTransformer") as mock_st, \
          patch("rak.cli.RakConfig", return_value=fake_config):
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = zot_item
@@ -318,7 +318,7 @@ def test_export_csv_output(tmp_path: Path):
     ]
 
     with patch("rak.cli.RakConfig", return_value=fake_config), \
-         patch("rak.embedder.SentenceTransformer") as mock_st, \
+         patch("sentence_transformers.SentenceTransformer") as mock_st, \
          patch("rak.searcher.Searcher.vector_search", return_value=mock_results), \
          patch("rak.store.VectorStore.__init__", return_value=None), \
          patch("rak.store.VectorStore.get", return_value={"metadatas": [{"date": "2024", "authors": "Doe"}]}), \
@@ -345,7 +345,7 @@ def test_export_bibtex_output(tmp_path: Path):
     ]
 
     with patch("rak.cli.RakConfig", return_value=fake_config), \
-         patch("rak.embedder.SentenceTransformer") as mock_st, \
+         patch("sentence_transformers.SentenceTransformer") as mock_st, \
          patch("rak.searcher.Searcher.vector_search", return_value=mock_results), \
          patch("rak.store.VectorStore.__init__", return_value=None), \
          patch("rak.store.VectorStore.get", return_value={"metadatas": [{"date": "2024", "authors": "Smith"}]}), \
@@ -372,7 +372,7 @@ def test_export_to_file(tmp_path: Path):
     ]
 
     with patch("rak.cli.RakConfig", return_value=fake_config), \
-         patch("rak.embedder.SentenceTransformer") as mock_st, \
+         patch("sentence_transformers.SentenceTransformer") as mock_st, \
          patch("rak.searcher.Searcher.vector_search", return_value=mock_results), \
          patch("rak.store.VectorStore.__init__", return_value=None), \
          patch("rak.store.VectorStore.get", return_value={"metadatas": [{}]}), \
@@ -394,7 +394,7 @@ def test_export_no_results(tmp_path: Path):
     runner = CliRunner()
 
     with patch("rak.cli.RakConfig", return_value=fake_config), \
-         patch("rak.embedder.SentenceTransformer") as mock_st, \
+         patch("sentence_transformers.SentenceTransformer") as mock_st, \
          patch("rak.searcher.Searcher.vector_search", return_value=[]), \
          patch("rak.store.VectorStore.__init__", return_value=None), \
          patch("rak.bm25.BM25Index.__init__", return_value=None), \
@@ -421,7 +421,7 @@ def test_search_vector_results(tmp_path: Path):
     ]
 
     with patch("rak.cli.RakConfig", return_value=fake_config), \
-         patch("rak.embedder.SentenceTransformer") as mock_st, \
+         patch("sentence_transformers.SentenceTransformer") as mock_st, \
          patch("rak.searcher.Searcher.vector_search", return_value=mock_results), \
          patch("rak.store.VectorStore.__init__", return_value=None), \
          patch("rak.bm25.BM25Index.__init__", return_value=None), \
@@ -445,7 +445,7 @@ def test_search_json_output(tmp_path: Path):
     ]
 
     with patch("rak.cli.RakConfig", return_value=fake_config), \
-         patch("rak.embedder.SentenceTransformer") as mock_st, \
+         patch("sentence_transformers.SentenceTransformer") as mock_st, \
          patch("rak.searcher.Searcher.vector_search", return_value=mock_results), \
          patch("rak.store.VectorStore.__init__", return_value=None), \
          patch("rak.bm25.BM25Index.__init__", return_value=None), \
@@ -467,7 +467,7 @@ def test_search_no_results_json(tmp_path: Path):
     runner = CliRunner()
 
     with patch("rak.cli.RakConfig", return_value=fake_config), \
-         patch("rak.embedder.SentenceTransformer") as mock_st, \
+         patch("sentence_transformers.SentenceTransformer") as mock_st, \
          patch("rak.searcher.Searcher.vector_search", return_value=[]), \
          patch("rak.store.VectorStore.__init__", return_value=None), \
          patch("rak.bm25.BM25Index.__init__", return_value=None), \
@@ -492,7 +492,7 @@ def test_search_hybrid_mode(tmp_path: Path):
     ]
 
     with patch("rak.cli.RakConfig", return_value=fake_config), \
-         patch("rak.embedder.SentenceTransformer") as mock_st, \
+         patch("sentence_transformers.SentenceTransformer") as mock_st, \
          patch("rak.searcher.Searcher.hybrid_search", return_value=mock_results), \
          patch("rak.store.VectorStore.__init__", return_value=None), \
          patch("rak.bm25.BM25Index.__init__", return_value=None), \
