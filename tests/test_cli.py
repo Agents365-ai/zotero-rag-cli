@@ -85,8 +85,12 @@ def test_index_writes_metadata(tmp_path: Path):
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = zot_item
         mock_model = mock_st.return_value
-        mock_model.encode.return_value.__iter__ = lambda self: iter([0.1] * 384)
-        mock_model.encode.return_value.tolist.return_value = [0.1] * 384
+        import numpy as np
+        def _fake_encode(text_or_texts, **kwargs):
+            if isinstance(text_or_texts, list):
+                return np.array([[0.1] * 384 for _ in text_or_texts])
+            return np.array([0.1] * 384)
+        mock_model.encode.side_effect = _fake_encode
         mock_model.get_sentence_embedding_dimension.return_value = 384
         result = runner.invoke(main, ["index"])
 

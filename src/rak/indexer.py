@@ -126,6 +126,20 @@ def _build_metadata(item: dict) -> dict:
     return metadata
 
 
+def _embed_and_store_batch(
+    batch_ids: list[str],
+    batch_texts: list[str],
+    batch_metadatas: list[dict],
+    embedder: Embedder,
+    vector_store: VectorStore,
+) -> None:
+    """Embed a batch of texts and store them in the vector store."""
+    if not batch_texts:
+        return
+    embeddings = embedder.embed_batch(batch_texts)
+    vector_store.add(ids=batch_ids, embeddings=embeddings, documents=batch_texts, metadatas=batch_metadatas)
+
+
 def _index_full(
     items: list[dict],
     embedder: Embedder,
@@ -137,6 +151,11 @@ def _index_full(
     chunk_overlap: int = 64,
 ) -> int:
     count = 0
+    batch_ids: list[str] = []
+    batch_texts: list[str] = []
+    batch_metadatas: list[dict] = []
+    embed_batch_size = 32
+
     for i, item in enumerate(items):
         key = item.get("key", "")
         if not key:
@@ -152,20 +171,29 @@ def _index_full(
         metadata = _build_metadata(item)
         # Store full document for BM25
         bm25_index.add(key, text)
-        # Store chunks (or whole doc if short) in vector store
+        # Accumulate chunks for batch embedding
         chunks = chunk_text(text, chunk_size=chunk_size, overlap=chunk_overlap)
         if len(chunks) <= 1:
-            embedding = embedder.embed(text)
-            vector_store.add(ids=[key], embeddings=[embedding], documents=[text], metadatas=[metadata])
+            batch_ids.append(key)
+            batch_texts.append(text)
+            batch_metadatas.append(metadata)
         else:
             for ci, chunk in enumerate(chunks):
                 chunk_id = f"{key}_chunk_{ci}"
                 chunk_meta = {**metadata, "parent_key": key, "chunk_index": ci}
-                embedding = embedder.embed(chunk)
-                vector_store.add(ids=[chunk_id], embeddings=[embedding], documents=[chunk], metadatas=[chunk_meta])
+                batch_ids.append(chunk_id)
+                batch_texts.append(chunk)
+                batch_metadatas.append(chunk_meta)
+        # Flush batch when full
+        if len(batch_texts) >= embed_batch_size:
+            _embed_and_store_batch(batch_ids, batch_texts, batch_metadatas, embedder, vector_store)
+            batch_ids, batch_texts, batch_metadatas = [], [], []
         count += 1
         if on_progress and (i + 1) % 50 == 0:
             on_progress(i + 1, len(items))
+
+    # Flush remaining
+    _embed_and_store_batch(batch_ids, batch_texts, batch_metadatas, embedder, vector_store)
     return count
 
 
@@ -186,6 +214,11 @@ def _index_incremental(
     updated = 0
 
     work_items = [(item, "add") for item in to_add] + [(item, "update") for item in to_update]
+    batch_ids: list[str] = []
+    batch_texts: list[str] = []
+    batch_metadatas: list[dict] = []
+    embed_batch_size = 32
+
     for i, (item, action) in enumerate(work_items):
         key = item["key"]
         pdf_text = ""
@@ -203,14 +236,19 @@ def _index_incremental(
         bm25_index.add(key, text)
         chunks = chunk_text(text, chunk_size=chunk_size, overlap=chunk_overlap)
         if len(chunks) <= 1:
-            embedding = embedder.embed(text)
-            vector_store.add(ids=[key], embeddings=[embedding], documents=[text], metadatas=[metadata])
+            batch_ids.append(key)
+            batch_texts.append(text)
+            batch_metadatas.append(metadata)
         else:
             for ci, chunk in enumerate(chunks):
                 chunk_id = f"{key}_chunk_{ci}"
                 chunk_meta = {**metadata, "parent_key": key, "chunk_index": ci}
-                embedding = embedder.embed(chunk)
-                vector_store.add(ids=[chunk_id], embeddings=[embedding], documents=[chunk], metadatas=[chunk_meta])
+                batch_ids.append(chunk_id)
+                batch_texts.append(chunk)
+                batch_metadatas.append(chunk_meta)
+        if len(batch_texts) >= embed_batch_size:
+            _embed_and_store_batch(batch_ids, batch_texts, batch_metadatas, embedder, vector_store)
+            batch_ids, batch_texts, batch_metadatas = [], [], []
         new_registry[key] = compute_hash(text)
         if action == "add":
             added += 1
@@ -218,6 +256,8 @@ def _index_incremental(
             updated += 1
         if on_progress and (i + 1) % 50 == 0:
             on_progress(i + 1, len(work_items))
+
+    _embed_and_store_batch(batch_ids, batch_texts, batch_metadatas, embedder, vector_store)
 
     for key in to_remove:
         _delete_chunks(vector_store, key)
