@@ -10,6 +10,7 @@ dependencies = [
     "chromadb>=0.5",
     "rich>=13.0",
     "platformdirs>=4.0",
+    "PyMuPDF>=1.24",
 ]
 
 [project.optional-dependencies]
