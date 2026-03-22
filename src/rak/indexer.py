@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import subprocess
 
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from rak.bm25 import BM25Index
 from rak.embedder import Embedder
@@ -107,8 +110,8 @@ def _delete_chunks(vector_store: VectorStore, key: str) -> None:
         results = vector_store.get_by_metadata(where={"parent_key": key})
         if results["ids"]:
             vector_store.delete(results["ids"])
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Failed to delete chunks for %s: %s", key, exc)
 
 
 def _build_metadata(item: dict) -> dict:

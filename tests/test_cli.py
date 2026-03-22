@@ -231,3 +231,274 @@ def test_completion_help():
     result = runner.invoke(main, ["completion", "--help"])
     assert result.exit_code == 0
     assert "shell completion" in result.output.lower()
+
+
+# --- Config integration tests ---
+
+
+def test_config_show_all(tmp_path: Path):
+    from rak.config import RakConfig
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+    with patch("rak.cli.RakConfig", return_value=fake_config):
+        result = runner.invoke(main, ["config"])
+    assert result.exit_code == 0
+    assert "model_name = " in result.output
+    assert "zot_command = " in result.output
+    assert "llm_base_url = " in result.output
+    assert "llm_model = " in result.output
+    assert "llm_api_key = " in result.output
+
+
+def test_config_get_single_key(tmp_path: Path):
+    from rak.config import RakConfig
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+    with patch("rak.cli.RakConfig", return_value=fake_config):
+        result = runner.invoke(main, ["config", "llm_model"])
+    assert result.exit_code == 0
+    assert "llm_model = llama3" in result.output
+
+
+def test_config_get_unknown_key(tmp_path: Path):
+    from rak.config import RakConfig
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+    with patch("rak.cli.RakConfig", return_value=fake_config):
+        result = runner.invoke(main, ["config", "nonexistent_key"])
+    assert result.exit_code == 1
+
+
+def test_config_set_value(tmp_path: Path):
+    from rak.config import RakConfig, load_config
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+    with patch("rak.cli.RakConfig", return_value=fake_config):
+        result = runner.invoke(main, ["config", "llm_model", "mistral"])
+    assert result.exit_code == 0
+    assert "llm_model = mistral" in result.output
+    cfg = load_config(tmp_path)
+    assert cfg["llm_model"] == "mistral"
+
+
+def test_config_set_unknown_key(tmp_path: Path):
+    from rak.config import RakConfig
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+    with patch("rak.cli.RakConfig", return_value=fake_config):
+        result = runner.invoke(main, ["config", "bad_key", "value"])
+    assert result.exit_code == 1
+    assert "Unknown config key" in result.output
+
+
+def test_config_masks_api_key(tmp_path: Path):
+    from rak.config import RakConfig, save_config
+    save_config(tmp_path, "llm_api_key", "sk-abcdefghijklmnop")
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+    with patch("rak.cli.RakConfig", return_value=fake_config):
+        result = runner.invoke(main, ["config"])
+    assert "..." in result.output
+    assert "sk-abcdefghijklmnop" not in result.output
+
+
+# --- Export integration tests ---
+
+
+def test_export_csv_output(tmp_path: Path):
+    from rak.config import RakConfig
+    from rak.searcher import SearchResult
+
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+
+    mock_results = [
+        SearchResult(doc_id="A1", score=0.9, title="Paper One", source="vector"),
+        SearchResult(doc_id="A2", score=0.7, title="Paper Two", source="vector"),
+    ]
+
+    with patch("rak.cli.RakConfig", return_value=fake_config), \
+         patch("rak.embedder.SentenceTransformer") as mock_st, \
+         patch("rak.searcher.Searcher.vector_search", return_value=mock_results), \
+         patch("rak.store.VectorStore.__init__", return_value=None), \
+         patch("rak.store.VectorStore.get", return_value={"metadatas": [{"date": "2024", "authors": "Doe"}]}), \
+         patch("rak.bm25.BM25Index.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.close"):
+        mock_st.return_value.get_sentence_embedding_dimension.return_value = 384
+        result = runner.invoke(main, ["export", "test query"])
+
+    assert result.exit_code == 0
+    assert "key,title,score,source" in result.output
+    assert "A1" in result.output
+    assert "Paper One" in result.output
+
+
+def test_export_bibtex_output(tmp_path: Path):
+    from rak.config import RakConfig
+    from rak.searcher import SearchResult
+
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+
+    mock_results = [
+        SearchResult(doc_id="B1", score=0.8, title="Deep Learning", source="vector"),
+    ]
+
+    with patch("rak.cli.RakConfig", return_value=fake_config), \
+         patch("rak.embedder.SentenceTransformer") as mock_st, \
+         patch("rak.searcher.Searcher.vector_search", return_value=mock_results), \
+         patch("rak.store.VectorStore.__init__", return_value=None), \
+         patch("rak.store.VectorStore.get", return_value={"metadatas": [{"date": "2024", "authors": "Smith"}]}), \
+         patch("rak.bm25.BM25Index.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.close"):
+        mock_st.return_value.get_sentence_embedding_dimension.return_value = 384
+        result = runner.invoke(main, ["export", "test query", "--format", "bibtex"])
+
+    assert result.exit_code == 0
+    assert "@article{B1," in result.output
+    assert "Deep Learning" in result.output
+
+
+def test_export_to_file(tmp_path: Path):
+    from rak.config import RakConfig
+    from rak.searcher import SearchResult
+
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+    output_file = str(tmp_path / "results.csv")
+
+    mock_results = [
+        SearchResult(doc_id="C1", score=0.5, title="Paper", source="vector"),
+    ]
+
+    with patch("rak.cli.RakConfig", return_value=fake_config), \
+         patch("rak.embedder.SentenceTransformer") as mock_st, \
+         patch("rak.searcher.Searcher.vector_search", return_value=mock_results), \
+         patch("rak.store.VectorStore.__init__", return_value=None), \
+         patch("rak.store.VectorStore.get", return_value={"metadatas": [{}]}), \
+         patch("rak.bm25.BM25Index.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.close"):
+        mock_st.return_value.get_sentence_embedding_dimension.return_value = 384
+        result = runner.invoke(main, ["export", "test", "--output", output_file])
+
+    assert result.exit_code == 0
+    assert "Exported" in result.output
+    content = Path(output_file).read_text()
+    assert "C1" in content
+
+
+def test_export_no_results(tmp_path: Path):
+    from rak.config import RakConfig
+
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+
+    with patch("rak.cli.RakConfig", return_value=fake_config), \
+         patch("rak.embedder.SentenceTransformer") as mock_st, \
+         patch("rak.searcher.Searcher.vector_search", return_value=[]), \
+         patch("rak.store.VectorStore.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.close"):
+        mock_st.return_value.get_sentence_embedding_dimension.return_value = 384
+        result = runner.invoke(main, ["export", "nonexistent"])
+
+    assert result.exit_code == 0
+    assert "No results found" in result.output
+
+
+# --- Search integration tests ---
+
+
+def test_search_vector_results(tmp_path: Path):
+    from rak.config import RakConfig
+    from rak.searcher import SearchResult
+
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+
+    mock_results = [
+        SearchResult(doc_id="X1", score=0.95, title="RNA Sequencing", source="vector", snippet="chunk text"),
+    ]
+
+    with patch("rak.cli.RakConfig", return_value=fake_config), \
+         patch("rak.embedder.SentenceTransformer") as mock_st, \
+         patch("rak.searcher.Searcher.vector_search", return_value=mock_results), \
+         patch("rak.store.VectorStore.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.close"):
+        mock_st.return_value.get_sentence_embedding_dimension.return_value = 384
+        result = runner.invoke(main, ["search", "RNA"])
+
+    assert result.exit_code == 0
+    assert "RNA Sequencing" in result.output
+
+
+def test_search_json_output(tmp_path: Path):
+    from rak.config import RakConfig
+    from rak.searcher import SearchResult
+
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+
+    mock_results = [
+        SearchResult(doc_id="X1", score=0.95, title="Paper", source="vector", snippet="text"),
+    ]
+
+    with patch("rak.cli.RakConfig", return_value=fake_config), \
+         patch("rak.embedder.SentenceTransformer") as mock_st, \
+         patch("rak.searcher.Searcher.vector_search", return_value=mock_results), \
+         patch("rak.store.VectorStore.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.close"):
+        mock_st.return_value.get_sentence_embedding_dimension.return_value = 384
+        result = runner.invoke(main, ["--json", "search", "test"])
+
+    assert result.exit_code == 0
+    data = json_mod.loads(result.output)
+    assert len(data) == 1
+    assert data[0]["key"] == "X1"
+    assert data[0]["snippet"] == "text"
+
+
+def test_search_no_results_json(tmp_path: Path):
+    from rak.config import RakConfig
+
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+
+    with patch("rak.cli.RakConfig", return_value=fake_config), \
+         patch("rak.embedder.SentenceTransformer") as mock_st, \
+         patch("rak.searcher.Searcher.vector_search", return_value=[]), \
+         patch("rak.store.VectorStore.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.close"):
+        mock_st.return_value.get_sentence_embedding_dimension.return_value = 384
+        result = runner.invoke(main, ["--json", "search", "nothing"])
+
+    assert result.exit_code == 0
+    data = json_mod.loads(result.output)
+    assert data == []
+
+
+def test_search_hybrid_mode(tmp_path: Path):
+    from rak.config import RakConfig
+    from rak.searcher import SearchResult
+
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+
+    mock_results = [
+        SearchResult(doc_id="H1", score=0.03, title="Hybrid Paper", source="fused"),
+    ]
+
+    with patch("rak.cli.RakConfig", return_value=fake_config), \
+         patch("rak.embedder.SentenceTransformer") as mock_st, \
+         patch("rak.searcher.Searcher.hybrid_search", return_value=mock_results), \
+         patch("rak.store.VectorStore.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.close"):
+        mock_st.return_value.get_sentence_embedding_dimension.return_value = 384
+        result = runner.invoke(main, ["search", "test", "--hybrid"])
+
+    assert result.exit_code == 0
+    assert "Hybrid Paper" in result.output

@@ -381,6 +381,7 @@ def export(
                 "source": r.source,
                 "date": meta.get("date", ""),
                 "authors": meta.get("authors", ""),
+                "item_type": meta.get("item_type", ""),
             })
 
         if fmt == "bibtex":
