@@ -52,7 +52,7 @@ zot CLI → indexer (fetch + parse + PDF extract) → embedder → vector store 
 **Key modules and their roles:**
 
 - **cli.py** — Click entry point (`rak`). Commands: `index`, `search`, `ask`, `chat`, `export`, `config`, `status`, `clear`, `completion`. Global flags: `--json`, `--model`.
-- **config.py** — `RakConfig` dataclass. Paths via `platformdirs`, auto-detect Zotero storage, LLM settings. Persistent config via `config.json`.
+- **config.py** — `RakConfig` dataclass. Data stored in `~/Zotero/rak/`, auto-detect Zotero storage, LLM settings. Persistent config via `config.json`.
 - **embedder.py** — Wraps `SentenceTransformer`. `embed()` for single, `embed_batch()` for bulk (batch_size=32). Raises `ModelDownloadError` on failure.
 - **store.py** — `VectorStore` wrapping ChromaDB persistent client. Collection `rak_papers`, cosine distance. Supports `where` filter for metadata queries.
 - **bm25.py** — `BM25Index` using SQLite FTS5 virtual table for keyword search. Supports `delete()` for incremental updates.
@@ -68,7 +68,7 @@ zot CLI → indexer (fetch + parse + PDF extract) → embedder → vector store 
 
 **Design decisions:**
 - All computation is local — no API keys needed for search. LLM Q&A uses local servers (Ollama/LMStudio).
-- Data stored in platform-specific dir (`platformdirs.user_data_dir("rak")`): `chroma/` for vectors, `fts.sqlite` for keywords, `meta.json`, `registry.json`, `config.json`.
+- Data stored in `~/Zotero/rak/`: `chroma/` for vectors, `fts.sqlite` for keywords, `meta.json`, `registry.json`, `config.json`.
 - `zot` CLI is a required external dependency for data ingestion.
 - Indexing is incremental by default — content hashes detect new/changed/deleted items.
 - PDF extraction auto-detects `~/Zotero/storage/` and is silently skipped if unavailable.

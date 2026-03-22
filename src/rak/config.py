@@ -3,9 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from platformdirs import user_data_dir
-
-DEFAULT_DATA_DIR = Path(user_data_dir("rak"))
+DEFAULT_DATA_DIR = Path.home() / "Zotero" / "rak"
 DEFAULT_MODEL = "all-MiniLM-L6-v2"
 
 
