@@ -162,6 +162,39 @@ rak completion               # 自动检测 shell
 eval "$(rak completion)"
 ```
 
+## MCP Server（LM Studio / Cursor / Claude Desktop）
+
+`rak` 内置 MCP Server，可在支持 MCP 协议的工具中直接调用搜索功能。
+
+### 安装
+
+```bash
+pip install zotero-rag-cli[mcp]
+```
+
+### 提供的工具
+
+| 工具 | 功能 |
+|------|------|
+| `search_papers` | 语义/混合搜索，返回论文标题、摘要、全文 |
+| `index_status` | 查看索引状态 |
+
+### 配置
+
+在 LM Studio / Cursor / Claude Desktop 的 MCP 配置中添加：
+
+```json
+{
+  "mcpServers": {
+    "rak": {
+      "command": "rak-mcp"
+    }
+  }
+}
+```
+
+LM Studio 等工具的大模型会自动获取论文全文作为上下文来回答问题，无需 rak 再调用额外的 LLM。
+
 ## 同类工具对比
 
 | 特性 | **rak** | [zotero-mcp](https://github.com/54yyyu/zotero-mcp) | [cookjohn/zotero-mcp](https://github.com/cookjohn/zotero-mcp) | [ZoteroBridge](https://github.com/Combjellyshen/ZoteroBridge) |
@@ -174,7 +207,7 @@ eval "$(rak completion)"
 | **流式输出** | **✅** | ❌ | ❌ | ❌ |
 | **100% 本地 / 无需 API Key** | **✅** | ❌ | ❌ | ❌ |
 | **CLI 终端使用** | **✅** | ❌ | ❌ | ❌ |
-| **MCP 协议** | ❌ | ✅ | ✅ | ✅ |
+| **MCP 协议** | **✅** | ✅ | ✅ | ✅ |
 | **Collection/标签过滤** | **✅** | ✅ | ✅ | ✅ |
 | **BibTeX/CSV 导出** | **✅** | ❌ | ❌ | ❌ |
 | **增量索引** | **✅** | N/A | N/A | N/A |

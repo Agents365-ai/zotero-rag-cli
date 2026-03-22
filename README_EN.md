@@ -153,6 +153,39 @@ rak completion               # Auto-detect shell
 eval "$(rak completion)"
 ```
 
+## MCP Server (LM Studio / Cursor / Claude Desktop)
+
+`rak` includes a built-in MCP Server for tools that support the MCP protocol.
+
+### Install
+
+```bash
+pip install zotero-rag-cli[mcp]
+```
+
+### Available Tools
+
+| Tool | Purpose |
+|------|---------|
+| `search_papers` | Semantic/hybrid search, returns paper titles, abstracts, and full text |
+| `index_status` | Show index status |
+
+### Configuration
+
+Add to your MCP config (LM Studio / Cursor / Claude Desktop):
+
+```json
+{
+  "mcpServers": {
+    "rak": {
+      "command": "rak-mcp"
+    }
+  }
+}
+```
+
+The LLM in LM Studio / Cursor automatically receives paper full text as context — no need for rak to call an additional LLM.
+
 ## Comparison with Similar Tools
 
 | Feature | **rak** | [zotero-mcp](https://github.com/54yyyu/zotero-mcp) | [cookjohn/zotero-mcp](https://github.com/cookjohn/zotero-mcp) | [ZoteroBridge](https://github.com/Combjellyshen/ZoteroBridge) |
@@ -165,7 +198,7 @@ eval "$(rak completion)"
 | **Streaming Responses** | **✅** | ❌ | ❌ | ❌ |
 | **100% Local / No API Keys** | **✅** | ❌ | ❌ | ❌ |
 | **CLI Terminal Use** | **✅** | ❌ | ❌ | ❌ |
-| **MCP Protocol** | ❌ | ✅ | ✅ | ✅ |
+| **MCP Protocol** | **✅** | ✅ | ✅ | ✅ |
 | **Collection/Tag Filters** | **✅** | ✅ | ✅ | ✅ |
 | **BibTeX/CSV Export** | **✅** | ❌ | ❌ | ❌ |
 | **Incremental Indexing** | **✅** | N/A | N/A | N/A |
