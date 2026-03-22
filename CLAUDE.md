@@ -29,7 +29,8 @@ rak status                         # Show index stats
 rak clear --yes                    # Reset all indexes
 rak config                         # Show settings
 rak config llm_model mistral       # Set config value
-rak search "query" --hybrid        # Hybrid search
+rak search "query" --hybrid        # Hybrid search (vector + BM25)
+rak search "query" --bm25          # Pure keyword search (no embedding model needed)
 rak search "q" --collection X --tag Y  # Filtered search
 rak ask "question"                 # LLM Q&A (needs Ollama/LMStudio/remote API)
 rak export "query" --format bibtex # Export as BibTeX
@@ -56,11 +57,11 @@ zot CLI → indexer (fetch + parse + PDF/MD extract) → embedder → vector sto
 - **config.py** — `RakConfig` dataclass. Data stored in `~/Zotero/rak/`, auto-detect Zotero storage, LLM and embedding settings. Persistent config via `config.json`.
 - **embedder.py** — Supports two providers: `local` (SentenceTransformer) and `api` (OpenAI-compatible `/v1/embeddings`). `embed()` for single, `embed_batch()` for bulk. Suppresses noisy model loading output.
 - **store.py** — `VectorStore` wrapping ChromaDB persistent client. Collection `rak_papers`, cosine distance. `search()` clamps `n_results` to collection size. `get_ids_by_metadata()` returns IDs only.
-- **bm25.py** — `BM25Index` using SQLite FTS5 virtual table. `add()` ensures uniqueness via delete-before-insert. Implements context manager for safe resource cleanup.
+- **bm25.py** — `BM25Index` using SQLite FTS5 virtual table. `add()` ensures uniqueness via delete-before-insert. `search_with_snippet()` returns FTS5 snippet highlights. Implements context manager for safe resource cleanup.
 - **indexer.py** — Orchestrates: `fetch_zot_items()` shells out to `zot --json --limit list`, `build_document_text()` concatenates title/authors/abstract/tags/attachment_text, `diff_items()` computes add/update/remove sets with text cache to avoid redundant extraction, `index_items()` supports both full and incremental modes via registry. Long documents are chunked into overlapping segments stored as separate vectors.
-- **searcher.py** — `Searcher` with dependency-injected embedder/store/bm25. `build_where_filter()` builds ChromaDB metadata filters. `hybrid_search()` fuses vector + BM25 via `rrf_fuse(k=60)`. Chunk results are deduplicated to parent papers via `_deduplicate_chunks()`. Results include `snippet` from the best-matched chunk.
+- **searcher.py** — `Searcher` with dependency-injected embedder/store/bm25 (embedder and store are optional for BM25-only mode). `build_where_filter()` builds ChromaDB metadata filters. `bm25_search()` does pure keyword search without loading embeddings. `hybrid_search()` fuses vector + BM25 via `rrf_fuse(k=60)`. Chunk results are deduplicated to parent papers via `_deduplicate_chunks()`. Results include `snippet` from the best-matched chunk.
 - **formatter.py** — Rich tables, JSON output (with optional snippets), incremental stats, and ask result formatting.
-- **pdf.py** — `extract_pdf_text()` via PyMuPDF, `extract_file_text()` handles PDF and Markdown. `find_attachments()` locates all PDF/MD files per Zotero item. `chunk_text()` splits long text into overlapping word-level chunks (default 512 words, 64 overlap). Validates `overlap < chunk_size`.
+- **pdf.py** — `extract_pdf_text()` via PyMuPDF, `extract_file_text()` handles PDF and Markdown. `find_attachments()` locates all PDF/MD files per Zotero item. `chunk_text()` splits text preferring paragraph/section boundaries (double newlines, markdown headings), merging small paragraphs up to `chunk_size` words and falling back to word-level overlap for oversized paragraphs. Validates `overlap < chunk_size`.
 - **llm.py** — `LLMClient` wrapping OpenAI SDK for chat completions. Compatible with Ollama, LM Studio, OpenAI, DeepSeek, and any OpenAI-compatible endpoint.
 - **export.py** — `to_csv()` and `to_bibtex()` formatters with BibTeX special character escaping and proper Zotero-to-BibTeX type mapping.
 - **metadata.py** — `IndexMetadata` dataclass, `save_metadata()`/`load_metadata()` for tracking index state.
@@ -89,4 +90,4 @@ Uses `hatchling`. Entry point: `rak = "rak.cli:main"`, `rak-mcp = "rak.mcp_serve
 
 ## Testing
 
-128 tests. `@pytest.mark.network` marks tests requiring model downloads. CI runs `pytest -m "not network"`.
+141 tests. `@pytest.mark.network` marks tests requiring model downloads. CI runs `pytest -m "not network"`.

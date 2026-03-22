@@ -379,10 +379,10 @@ graph LR
 - [x] BM25 索引添加 `doc_id` 唯一性约束，防止重复插入导致评分膨胀
 - [x] 重命名 `get_by_metadata` → `get_ids_by_metadata`，明确接口语义
 - [x] 添加 `--verbose` 全局选项，启用 debug 级别日志输出便于排查问题
-- [ ] `rak search --bm25` 纯关键词搜索模式，无需加载嵌入模型
-- [ ] 索引进度条（Rich progress 替代 `Indexed 50/3038...`）
+- [x] `rak search --bm25` 纯关键词搜索模式，无需加载嵌入模型
+- [x] 索引进度条（Rich progress 替代 `Indexed 50/3038...`）
 - [ ] `rak similar KEY` 查找与指定论文相似的论文
-- [ ] 智能分块：按段落/章节切分替代固定 512 词窗口
+- [x] 智能分块：按段落/章节切分替代固定 512 词窗口
 
 ## 相关项目
 

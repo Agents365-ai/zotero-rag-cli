@@ -60,3 +60,25 @@ def test_search_query_with_quotes(bm25):
     bm25.add("A1", "he said hello world")
     results = bm25.search('he said "hello"', limit=5)
     assert isinstance(results, list)
+
+
+def test_search_with_snippet(bm25):
+    bm25.add("A1", "single cell RNA sequencing analysis method")
+    bm25.add("A2", "deep learning for image classification")
+    results = bm25.search_with_snippet("single cell RNA", limit=5)
+    assert len(results) >= 1
+    assert results[0]["id"] == "A1"
+    assert "snippet" in results[0]
+    assert results[0]["snippet"]  # non-empty
+
+
+def test_search_with_snippet_no_results(bm25):
+    bm25.add("A1", "deep learning")
+    results = bm25.search_with_snippet("quantum physics", limit=5)
+    assert results == []
+
+
+def test_search_with_snippet_has_title_key(bm25):
+    bm25.add("A1", "transformer attention mechanism")
+    results = bm25.search_with_snippet("transformer", limit=1)
+    assert "title" in results[0]

@@ -60,14 +60,24 @@ def index(ctx: click.Context, limit: int, full: bool) -> None:
         else:
             click.echo("PDF extraction: Zotero storage not found, indexing metadata only.")
 
-        def on_progress(current: int, total: int) -> None:
-            click.echo(f"  Indexed {current}/{total}...")
-
         registry = None if full else load_registry(config.data_dir)
         if registry is not None and not registry:
             registry = None
 
-        with BM25Index(config.fts_db_path) as bm25:
+        from rich.progress import Progress, BarColumn, TextColumn, MofNCompleteColumn, TimeRemainingColumn
+
+        with BM25Index(config.fts_db_path) as bm25, \
+             Progress(
+                 TextColumn("[bold blue]{task.description}"),
+                 BarColumn(),
+                 MofNCompleteColumn(),
+                 TimeRemainingColumn(),
+             ) as progress:
+            task = progress.add_task("Indexing", total=len(items))
+
+            def on_progress(current: int, total: int) -> None:
+                progress.update(task, completed=current)
+
             if registry is None:
                 if full:
                     vector_store.clear()
@@ -195,32 +205,38 @@ def config_cmd(ctx: click.Context, key: str | None, value: str | None) -> None:
 @main.command()
 @click.argument("query")
 @click.option("--hybrid", is_flag=True, help="Use hybrid search (vector + BM25)")
+@click.option("--bm25", "bm25_only", is_flag=True, help="Pure keyword search (no embedding model needed)")
 @click.option("--limit", default=10, help="Number of results")
 @click.option("--collection", default=None, help="Filter by Zotero collection name")
 @click.option("--tag", "tags", multiple=True, help="Filter by tag (repeatable, OR logic)")
 @click.pass_context
-def search(ctx: click.Context, query: str, hybrid: bool, limit: int, collection: str | None, tags: tuple[str, ...]) -> None:
+def search(ctx: click.Context, query: str, hybrid: bool, bm25_only: bool, limit: int, collection: str | None, tags: tuple[str, ...]) -> None:
     """Semantic search over indexed papers."""
     from rak.bm25 import BM25Index
-    from rak.embedder import Embedder
     from rak.formatter import format_results
     from rak.searcher import Searcher
-    from rak.store import VectorStore
 
     config: RakConfig = ctx.obj["config"]
     json_out = ctx.obj["json"]
 
     try:
-        embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
-        vector_store = VectorStore(config.chroma_dir, embedder.dimension)
-        with BM25Index(config.fts_db_path) as bm25:
-            searcher = Searcher(embedder, vector_store, bm25)
+        if bm25_only:
+            with BM25Index(config.fts_db_path) as bm25:
+                searcher = Searcher(None, None, bm25)
+                results = searcher.bm25_search(query, limit=limit)
+        else:
+            from rak.embedder import Embedder
+            from rak.store import VectorStore
+            embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
+            vector_store = VectorStore(config.chroma_dir, embedder.dimension)
+            with BM25Index(config.fts_db_path) as bm25:
+                searcher = Searcher(embedder, vector_store, bm25)
 
-            tag_list = list(tags) if tags else None
-            if hybrid:
-                results = searcher.hybrid_search(query, limit=limit, collection=collection, tags=tag_list)
-            else:
-                results = searcher.vector_search(query, limit=limit, collection=collection, tags=tag_list)
+                tag_list = list(tags) if tags else None
+                if hybrid:
+                    results = searcher.hybrid_search(query, limit=limit, collection=collection, tags=tag_list)
+                else:
+                    results = searcher.vector_search(query, limit=limit, collection=collection, tags=tag_list)
 
         output = format_results(results, output_json=json_out)
         if output.strip():
@@ -237,6 +253,7 @@ def search(ctx: click.Context, query: str, hybrid: bool, limit: int, collection:
 @click.argument("question")
 @click.option("--context", "context_n", default=5, help="Number of documents to retrieve")
 @click.option("--hybrid", is_flag=True, help="Use hybrid search (vector + BM25)")
+@click.option("--bm25", "bm25_only", is_flag=True, help="Pure keyword search (no embedding model needed)")
 @click.option("--collection", default=None, help="Filter by Zotero collection name")
 @click.option("--tag", "tags", multiple=True, help="Filter by tag (repeatable, OR logic)")
 @click.option("--llm-model", default=None, help="Override LLM model name")
@@ -247,6 +264,7 @@ def ask(
     question: str,
     context_n: int,
     hybrid: bool,
+    bm25_only: bool,
     collection: str | None,
     tags: tuple[str, ...],
     llm_model: str | None,
@@ -254,26 +272,31 @@ def ask(
 ) -> None:
     """Ask a question and get an answer based on your papers."""
     from rak.bm25 import BM25Index
-    from rak.embedder import Embedder
     from rak.formatter import format_ask_result
     from rak.llm import LLMClient, LLMConnectionError, LLMServerError
     from rak.searcher import Searcher
-    from rak.store import VectorStore
 
     config: RakConfig = ctx.obj["config"]
     json_out = ctx.obj["json"]
 
     try:
-        embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
-        vector_store = VectorStore(config.chroma_dir, embedder.dimension)
-        with BM25Index(config.fts_db_path) as bm25:
-            searcher = Searcher(embedder, vector_store, bm25)
+        if bm25_only:
+            with BM25Index(config.fts_db_path) as bm25:
+                searcher = Searcher(None, None, bm25)
+                results = searcher.bm25_search(question, limit=context_n)
+        else:
+            from rak.embedder import Embedder
+            from rak.store import VectorStore
+            embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
+            vector_store = VectorStore(config.chroma_dir, embedder.dimension)
+            with BM25Index(config.fts_db_path) as bm25:
+                searcher = Searcher(embedder, vector_store, bm25)
 
-            tag_list = list(tags) if tags else None
-            if hybrid:
-                results = searcher.hybrid_search(question, limit=context_n, collection=collection, tags=tag_list)
-            else:
-                results = searcher.vector_search(question, limit=context_n, collection=collection, tags=tag_list)
+                tag_list = list(tags) if tags else None
+                if hybrid:
+                    results = searcher.hybrid_search(question, limit=context_n, collection=collection, tags=tag_list)
+                else:
+                    results = searcher.vector_search(question, limit=context_n, collection=collection, tags=tag_list)
 
         if not results:
             click.echo("No relevant papers found for your question.")
@@ -317,6 +340,7 @@ def ask(
 @click.argument("query")
 @click.option("--format", "fmt", type=click.Choice(["csv", "bibtex"]), default="csv", help="Export format")
 @click.option("--hybrid", is_flag=True, help="Use hybrid search (vector + BM25)")
+@click.option("--bm25", "bm25_only", is_flag=True, help="Pure keyword search (no embedding model needed)")
 @click.option("--limit", default=10, help="Number of results")
 @click.option("--collection", default=None, help="Filter by Zotero collection name")
 @click.option("--tag", "tags", multiple=True, help="Filter by tag (repeatable, OR logic)")
@@ -327,6 +351,7 @@ def export(
     query: str,
     fmt: str,
     hybrid: bool,
+    bm25_only: bool,
     limit: int,
     collection: str | None,
     tags: tuple[str, ...],
@@ -334,24 +359,30 @@ def export(
 ) -> None:
     """Export search results as CSV or BibTeX."""
     from rak.bm25 import BM25Index
-    from rak.embedder import Embedder
     from rak.export import to_bibtex, to_csv
     from rak.searcher import Searcher
-    from rak.store import VectorStore
 
     config: RakConfig = ctx.obj["config"]
+    vector_store = None
 
     try:
-        embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
-        vector_store = VectorStore(config.chroma_dir, embedder.dimension)
-        with BM25Index(config.fts_db_path) as bm25:
-            searcher = Searcher(embedder, vector_store, bm25)
+        if bm25_only:
+            with BM25Index(config.fts_db_path) as bm25:
+                searcher = Searcher(None, None, bm25)
+                results = searcher.bm25_search(query, limit=limit)
+        else:
+            from rak.embedder import Embedder
+            from rak.store import VectorStore
+            embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
+            vector_store = VectorStore(config.chroma_dir, embedder.dimension)
+            with BM25Index(config.fts_db_path) as bm25:
+                searcher = Searcher(embedder, vector_store, bm25)
 
-            tag_list = list(tags) if tags else None
-            if hybrid:
-                results = searcher.hybrid_search(query, limit=limit, collection=collection, tags=tag_list)
-            else:
-                results = searcher.vector_search(query, limit=limit, collection=collection, tags=tag_list)
+                tag_list = list(tags) if tags else None
+                if hybrid:
+                    results = searcher.hybrid_search(query, limit=limit, collection=collection, tags=tag_list)
+                else:
+                    results = searcher.vector_search(query, limit=limit, collection=collection, tags=tag_list)
 
         if not results:
             click.echo("No results found.")
@@ -359,8 +390,10 @@ def export(
 
         export_rows = []
         for r in results:
-            doc_data = vector_store.get(ids=[r.doc_id], include=["metadatas"])
-            meta = doc_data["metadatas"][0] if doc_data["metadatas"] else {}
+            meta = {}
+            if vector_store is not None:
+                doc_data = vector_store.get(ids=[r.doc_id], include=["metadatas"])
+                meta = doc_data["metadatas"][0] if doc_data["metadatas"] else {}
             export_rows.append({
                 "key": r.doc_id,
                 "title": r.title,
@@ -414,6 +447,7 @@ def completion(shell: str | None) -> None:
 @main.command()
 @click.option("--context", "context_n", default=5, help="Number of documents to retrieve")
 @click.option("--hybrid", is_flag=True, help="Use hybrid search (vector + BM25)")
+@click.option("--bm25", "bm25_only", is_flag=True, help="Pure keyword search (no embedding model needed)")
 @click.option("--collection", default=None, help="Filter by Zotero collection name")
 @click.option("--tag", "tags", multiple=True, help="Filter by tag (repeatable, OR logic)")
 @click.option("--llm-model", default=None, help="Override LLM model name")
@@ -423,6 +457,7 @@ def chat(
     ctx: click.Context,
     context_n: int,
     hybrid: bool,
+    bm25_only: bool,
     collection: str | None,
     tags: tuple[str, ...],
     llm_model: str | None,
@@ -432,19 +467,28 @@ def chat(
     import sys
     from rak.bm25 import BM25Index
     from rak.chat import ChatSession
-    from rak.embedder import Embedder
     from rak.llm import LLMClient, LLMConnectionError, LLMServerError
     from rak.searcher import Searcher
-    from rak.store import VectorStore
 
     config: RakConfig = ctx.obj["config"]
 
     try:
-        embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
-        vector_store = VectorStore(config.chroma_dir, embedder.dimension)
-        with BM25Index(config.fts_db_path) as bm25:
+        if bm25_only:
+            from contextlib import ExitStack
+            stack = ExitStack()
+            bm25 = stack.enter_context(BM25Index(config.fts_db_path))
+            searcher = Searcher(None, None, bm25)
+        else:
+            from rak.embedder import Embedder
+            from rak.store import VectorStore
+            embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
+            vector_store = VectorStore(config.chroma_dir, embedder.dimension)
+            from contextlib import ExitStack
+            stack = ExitStack()
+            bm25 = stack.enter_context(BM25Index(config.fts_db_path))
             searcher = Searcher(embedder, vector_store, bm25)
 
+        with stack:
             base_url = llm_url or config.llm_base_url
             model = llm_model or config.llm_model
             api_key = config.llm_api_key
@@ -454,6 +498,7 @@ def chat(
             session = ChatSession(
                 searcher=searcher, llm=llm, limit=context_n,
                 collection=collection, tags=tag_list, hybrid=hybrid,
+                bm25_only=bm25_only,
             )
 
             click.echo("Enter a search query to find papers (or /quit to exit):")

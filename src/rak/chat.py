@@ -23,13 +23,14 @@ Commands:
 class ChatSession:
     def __init__(self, searcher: Searcher, llm: LLMClient, limit: int = 5,
                  collection: str | None = None, tags: list[str] | None = None,
-                 hybrid: bool = False) -> None:
+                 hybrid: bool = False, bm25_only: bool = False) -> None:
         self._searcher = searcher
         self._llm = llm
         self._limit = limit
         self._collection = collection
         self._tags = tags
         self._hybrid = hybrid
+        self._bm25_only = bm25_only
         self.context: list[dict] = []
         self.messages: list[dict] = []
 
@@ -42,7 +43,9 @@ class ChatSession:
         return sum(1 for m in self.messages if m["role"] == "user")
 
     def search(self, query: str) -> None:
-        if self._hybrid:
+        if self._bm25_only:
+            results = self._searcher.bm25_search(query, limit=self._limit)
+        elif self._hybrid:
             results = self._searcher.hybrid_search(
                 query, limit=self._limit, collection=self._collection, tags=self._tags)
         else:

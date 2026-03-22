@@ -113,3 +113,21 @@ def test_help_text_contains_commands():
     assert "/tokens" in HELP_TEXT
     assert "/help" in HELP_TEXT
     assert "/quit" in HELP_TEXT
+
+
+def test_chat_session_bm25_only_mode():
+    results = [
+        SearchResult(doc_id="K1", score=5.0, title="", source="bm25", snippet="keyword match"),
+    ]
+    searcher = MagicMock()
+    searcher.bm25_search.return_value = results
+    llm = _mock_llm(["Answer."])
+
+    session = ChatSession(searcher=searcher, llm=llm, bm25_only=True)
+    session.search("keyword query")
+
+    assert len(session.context) == 1
+    assert session.context[0]["key"] == "K1"
+    searcher.bm25_search.assert_called_once()
+    searcher.vector_search.assert_not_called()
+    searcher.hybrid_search.assert_not_called()

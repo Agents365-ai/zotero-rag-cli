@@ -202,7 +202,7 @@ def _index_full(
             _embed_and_store_batch(batch_ids, batch_texts, batch_metadatas, embedder, vector_store)
             batch_ids, batch_texts, batch_metadatas = [], [], []
         count += 1
-        if on_progress and (i + 1) % 50 == 0:
+        if on_progress:
             on_progress(i + 1, len(items))
 
     # Flush remaining
@@ -262,7 +262,7 @@ def _index_incremental(
             added += 1
         else:
             updated += 1
-        if on_progress and (i + 1) % 50 == 0:
+        if on_progress:
             on_progress(i + 1, len(work_items))
 
     _embed_and_store_batch(batch_ids, batch_texts, batch_metadatas, embedder, vector_store)

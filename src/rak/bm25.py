@@ -46,6 +46,27 @@ class BM25Index:
             return []
         return [{"id": row[0], "score": -row[1]} for row in rows]
 
+    def search_with_snippet(self, query: str, limit: int = 10) -> list[dict]:
+        """Search and return results with snippet extracted from content."""
+        safe_query = " ".join(
+            f'"{token.replace(chr(34), "")}"'
+            for token in query.split() if token.strip() and token.replace('"', '')
+        )
+        if not safe_query:
+            return []
+        try:
+            rows = self._conn.execute(
+                "SELECT doc_id, rank, snippet(papers_fts, 1, '', '', '...', 32) "
+                "FROM papers_fts "
+                "WHERE papers_fts MATCH ? "
+                "ORDER BY rank "
+                "LIMIT ?",
+                (safe_query, limit),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+        return [{"id": row[0], "score": -row[1], "snippet": row[2], "title": ""} for row in rows]
+
     def count(self) -> int:
         row = self._conn.execute("SELECT COUNT(*) FROM papers_fts").fetchone()
         return row[0]

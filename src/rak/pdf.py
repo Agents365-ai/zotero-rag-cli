@@ -43,15 +43,39 @@ def find_attachments(storage_dir: Path, item_key: str) -> list[Path]:
     return sorted(files)
 
 
+def _split_paragraphs(text: str) -> list[str]:
+    """Split text into paragraphs on double newlines and markdown headings."""
+    import re
+    # Split on double newlines or before markdown headings
+    parts = re.split(r'\n\s*\n|(?=\n#{1,6}\s)', text)
+    return [p.strip() for p in parts if p.strip()]
+
+
+def _chunk_words(text: str, chunk_size: int, overlap: int) -> list[str]:
+    """Fixed-size word-level chunking with overlap (fallback for oversized paragraphs)."""
+    words = text.split()
+    if not words:
+        return []
+    chunks = []
+    start = 0
+    while start < len(words):
+        end = start + chunk_size
+        chunks.append(" ".join(words[start:end]))
+        start = end - overlap
+    return chunks
+
+
 def chunk_text(
     text: str,
     chunk_size: int = 512,
     overlap: int = 64,
 ) -> list[str]:
-    """Split text into overlapping word-level chunks.
+    """Split text into chunks, preferring paragraph/section boundaries.
 
-    Returns a list of chunk strings. If the text fits in one chunk,
-    returns a single-element list.
+    Splits on double newlines and markdown headings first, then merges
+    small consecutive paragraphs up to chunk_size words. Oversized
+    paragraphs are split with word-level overlap. Returns a single-element
+    list if the text fits in one chunk.
     """
     if overlap >= chunk_size:
         raise ValueError(f"chunk_overlap ({overlap}) must be less than chunk_size ({chunk_size})")
@@ -60,10 +84,37 @@ def chunk_text(
         return []
     if len(words) <= chunk_size:
         return [text]
-    chunks = []
-    start = 0
-    while start < len(words):
-        end = start + chunk_size
-        chunks.append(" ".join(words[start:end]))
-        start = end - overlap
+
+    paragraphs = _split_paragraphs(text)
+    if len(paragraphs) <= 1:
+        # No paragraph structure found, fall back to word-level chunking
+        return _chunk_words(text, chunk_size, overlap)
+
+    # Merge small paragraphs, split oversized ones
+    chunks: list[str] = []
+    current_parts: list[str] = []
+    current_words = 0
+
+    for para in paragraphs:
+        para_words = len(para.split())
+        if para_words > chunk_size:
+            # Flush accumulated parts first
+            if current_parts:
+                chunks.append("\n\n".join(current_parts))
+                current_parts = []
+                current_words = 0
+            # Split oversized paragraph with overlap
+            chunks.extend(_chunk_words(para, chunk_size, overlap))
+        elif current_words + para_words > chunk_size and current_parts:
+            # Current buffer is full, flush it
+            chunks.append("\n\n".join(current_parts))
+            current_parts = [para]
+            current_words = para_words
+        else:
+            current_parts.append(para)
+            current_words += para_words
+
+    if current_parts:
+        chunks.append("\n\n".join(current_parts))
+
     return chunks

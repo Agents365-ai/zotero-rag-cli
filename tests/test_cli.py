@@ -192,6 +192,7 @@ def test_ask_help():
     assert result.exit_code == 0
     assert "--context" in result.output
     assert "--hybrid" in result.output
+    assert "--bm25" in result.output
     assert "--llm-model" in result.output
     assert "--llm-url" in result.output
     assert "--collection" in result.output
@@ -212,6 +213,7 @@ def test_export_help():
     assert "--format" in result.output
     assert "--output" in result.output
     assert "--hybrid" in result.output
+    assert "--bm25" in result.output
     assert "--collection" in result.output
     assert "--tag" in result.output
 
@@ -223,6 +225,7 @@ def test_chat_help():
     assert "Interactive multi-turn" in result.output
     assert "--context" in result.output
     assert "--hybrid" in result.output
+    assert "--bm25" in result.output
     assert "--llm-model" in result.output
 
 
@@ -478,6 +481,33 @@ def test_search_no_results_json(tmp_path: Path):
     assert result.exit_code == 0
     data = json_mod.loads(result.output)
     assert data == []
+
+
+def test_search_bm25_only(tmp_path: Path):
+    from rak.config import RakConfig
+    from rak.searcher import SearchResult
+
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+
+    mock_results = [
+        SearchResult(doc_id="K1", score=5.0, title="", source="bm25", snippet="keyword match"),
+    ]
+
+    with patch("rak.cli.RakConfig", return_value=fake_config), \
+         patch("rak.searcher.Searcher.bm25_search", return_value=mock_results), \
+         patch("rak.bm25.BM25Index.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.close"):
+        result = runner.invoke(main, ["search", "test", "--bm25"])
+
+    assert result.exit_code == 0
+    assert "K1" in result.output
+
+
+def test_search_bm25_help_flag():
+    runner = CliRunner()
+    result = runner.invoke(main, ["search", "--help"])
+    assert "--bm25" in result.output
 
 
 def test_search_hybrid_mode(tmp_path: Path):

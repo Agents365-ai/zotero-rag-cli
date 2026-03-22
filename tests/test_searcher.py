@@ -101,6 +101,38 @@ def test_rrf_fuse_preserves_snippets():
     assert snippets["C"] == ""
 
 
+def test_bm25_search_standalone():
+    """Test BM25-only search via Searcher (no embedder/vector store needed)."""
+    from unittest.mock import MagicMock
+    bm25 = MagicMock()
+    bm25.search_with_snippet.return_value = [
+        {"id": "A1", "score": 5.0, "snippet": "RNA analysis...", "title": ""},
+        {"id": "B1", "score": 3.0, "snippet": "cell method...", "title": ""},
+    ]
+    from rak.searcher import Searcher
+    searcher = Searcher(None, None, bm25)
+    results = searcher.bm25_search("RNA cell", limit=10)
+    assert len(results) == 2
+    assert results[0].doc_id == "A1"
+    assert results[0].source == "bm25"
+    assert results[0].snippet == "RNA analysis..."
+
+
+def test_bm25_search_deduplicates_chunks():
+    from unittest.mock import MagicMock
+    bm25 = MagicMock()
+    bm25.search_with_snippet.return_value = [
+        {"id": "A1_chunk_0", "score": 5.0, "snippet": "best chunk", "title": ""},
+        {"id": "A1_chunk_1", "score": 3.0, "snippet": "other chunk", "title": ""},
+        {"id": "B1", "score": 2.0, "snippet": "another paper", "title": ""},
+    ]
+    from rak.searcher import Searcher
+    searcher = Searcher(None, None, bm25)
+    results = searcher.bm25_search("test", limit=10)
+    ids = [r.doc_id for r in results]
+    assert ids == ["A1", "B1"]
+
+
 def test_deduplicate_chunks_no_chunks():
     results = [
         SearchResult(doc_id="A", score=0.9, title="Paper", source="vector"),

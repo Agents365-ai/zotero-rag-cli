@@ -77,10 +77,25 @@ def _deduplicate_chunks(results: list[SearchResult]) -> list[SearchResult]:
 
 
 class Searcher:
-    def __init__(self, embedder: Embedder, vector_store: VectorStore, bm25_index: BM25Index) -> None:
+    def __init__(self, embedder: Embedder | None, vector_store: VectorStore | None, bm25_index: BM25Index) -> None:
         self._embedder = embedder
         self._vector_store = vector_store
         self._bm25 = bm25_index
+
+    def bm25_search(
+        self, query: str, limit: int = 10,
+    ) -> list[SearchResult]:
+        """Pure BM25 keyword search. Does not require embedder or vector store."""
+        results = self._bm25.search_with_snippet(query, limit=limit)
+        raw = [
+            SearchResult(
+                doc_id=r["id"], score=r["score"],
+                title=r.get("title", ""), source="bm25",
+                snippet=r.get("snippet", ""),
+            )
+            for r in results
+        ]
+        return _deduplicate_chunks(raw)[:limit]
 
     def vector_search(
         self, query: str, limit: int = 10,
