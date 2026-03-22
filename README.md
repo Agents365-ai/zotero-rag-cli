@@ -20,21 +20,18 @@ graph LR
 ## 三种使用方式
 
 ```mermaid
-graph TD
-    subgraph "搜索模式 — 给 AI / 脚本"
-        S1[rak search] --> S2[返回论文标题 + 匹配片段]
-        S2 --> S3[Claude Code / 脚本解析]
-    end
+graph LR
+    S1[rak search] --> S2[返回论文标题 + 匹配片段] --> S3[Claude Code / 脚本解析]
+```
 
-    subgraph "问答模式 — 给人，一问一答"
-        A1[rak ask] --> A2[检索论文]
-        A2 --> A3[LLM 生成回答]
-    end
+```mermaid
+graph LR
+    A1[rak ask] --> A2[检索论文] --> A3[LLM 生成回答]
+```
 
-    subgraph "对话模式 — 给人，多轮讨论"
-        C1[rak chat] --> C2[检索论文]
-        C2 --> C3[多轮对话 + 上下文记忆]
-    end
+```mermaid
+graph LR
+    C1[rak chat] --> C2[检索论文] --> C3[多轮对话 + 上下文记忆]
 ```
 
 | 模式 | 命令 | 给谁用 | 需要 LLM？ |

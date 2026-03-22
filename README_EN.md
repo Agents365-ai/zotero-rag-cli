@@ -20,21 +20,18 @@ graph LR
 ## Three Usage Modes
 
 ```mermaid
-graph TD
-    subgraph "Search Mode — For AI / Scripts"
-        S1[rak search] --> S2[Returns titles + snippets]
-        S2 --> S3[Claude Code / scripts]
-    end
+graph LR
+    S1[rak search] --> S2[Returns titles + snippets] --> S3[Claude Code / scripts]
+```
 
-    subgraph "Ask Mode — For humans, one-shot"
-        A1[rak ask] --> A2[Retrieve papers]
-        A2 --> A3[LLM generates answer]
-    end
+```mermaid
+graph LR
+    A1[rak ask] --> A2[Retrieve papers] --> A3[LLM generates answer]
+```
 
-    subgraph "Chat Mode — For humans, multi-turn"
-        C1[rak chat] --> C2[Retrieve papers]
-        C2 --> C3[Multi-turn conversation]
-    end
+```mermaid
+graph LR
+    C1[rak chat] --> C2[Retrieve papers] --> C3[Multi-turn conversation]
 ```
 
 | Mode | Command | For Whom | LLM Required? |
