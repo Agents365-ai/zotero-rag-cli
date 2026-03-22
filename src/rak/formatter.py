@@ -46,3 +46,22 @@ def format_incremental_stats(stats: dict, output_json: bool = False) -> str:
         parts.append(f"{stats['removed']} removed")
     parts.append(f"{stats['unchanged']} unchanged")
     return ", ".join(parts) + "."
+
+
+def format_ask_result(
+    answer: str,
+    sources: list[dict],
+    output_json: bool = False,
+) -> str:
+    if output_json:
+        return json.dumps({
+            "answer": answer,
+            "sources": [
+                {"key": s["key"], "title": s["title"], "score": round(s["score"], 4)}
+                for s in sources
+            ],
+        }, indent=2, ensure_ascii=False)
+    lines = [answer, "", "Sources:"]
+    for i, s in enumerate(sources, 1):
+        lines.append(f"  {i}. {s['key']} - {s['title']} (score: {s['score']:.3f})")
+    return "\n".join(lines)
