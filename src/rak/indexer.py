@@ -4,9 +4,12 @@ import json
 import shutil
 import subprocess
 
+from pathlib import Path
+
 from rak.bm25 import BM25Index
 from rak.embedder import Embedder
 from rak.errors import EmptyLibraryError, ZotNotFoundError
+from rak.pdf import extract_pdf_text, find_pdf
 from rak.registry import compute_hash
 from rak.store import VectorStore
 
@@ -15,7 +18,7 @@ def parse_zot_items(raw_json: str) -> list[dict]:
     return json.loads(raw_json)
 
 
-def build_document_text(item: dict) -> str:
+def build_document_text(item: dict, pdf_text: str = "") -> str:
     parts = [item.get("title", "")]
     creators = item.get("creators", [])
     if creators:
@@ -30,6 +33,8 @@ def build_document_text(item: dict) -> str:
     tags = item.get("tags", [])
     if tags:
         parts.append("Tags: " + ", ".join(tags))
+    if pdf_text:
+        parts.append(pdf_text)
     return "\n".join(parts)
 
 
@@ -78,10 +83,11 @@ def index_items(
     bm25_index: BM25Index,
     on_progress: callable | None = None,
     registry: dict[str, str] | None = None,
+    storage_dir: Path | None = None,
 ) -> dict[str, int] | int:
     if registry is not None:
-        return _index_incremental(items, embedder, vector_store, bm25_index, on_progress, registry)
-    return _index_full(items, embedder, vector_store, bm25_index, on_progress)
+        return _index_incremental(items, embedder, vector_store, bm25_index, on_progress, registry, storage_dir)
+    return _index_full(items, embedder, vector_store, bm25_index, on_progress, storage_dir)
 
 
 def _index_full(
@@ -90,13 +96,19 @@ def _index_full(
     vector_store: VectorStore,
     bm25_index: BM25Index,
     on_progress: callable | None = None,
+    storage_dir: Path | None = None,
 ) -> int:
     count = 0
     for i, item in enumerate(items):
         key = item.get("key", "")
         if not key:
             continue
-        text = build_document_text(item)
+        pdf_text = ""
+        if storage_dir:
+            pdf_path = find_pdf(storage_dir, key)
+            if pdf_path:
+                pdf_text = extract_pdf_text(pdf_path)
+        text = build_document_text(item, pdf_text=pdf_text)
         if not text.strip():
             continue
         embedding = embedder.embed(text)
@@ -126,6 +138,7 @@ def _index_incremental(
     bm25_index: BM25Index,
     on_progress: callable | None = None,
     registry: dict[str, str] = None,
+    storage_dir: Path | None = None,
 ) -> dict[str, int]:
     to_add, to_update, to_remove = diff_items(items, registry)
     new_registry = dict(registry)
@@ -135,7 +148,12 @@ def _index_incremental(
     work_items = [(item, "add") for item in to_add] + [(item, "update") for item in to_update]
     for i, (item, action) in enumerate(work_items):
         key = item["key"]
-        text = build_document_text(item)
+        pdf_text = ""
+        if storage_dir:
+            pdf_path = find_pdf(storage_dir, key)
+            if pdf_path:
+                pdf_text = extract_pdf_text(pdf_path)
+        text = build_document_text(item, pdf_text=pdf_text)
         if not text.strip():
             continue
         embedding = embedder.embed(text)

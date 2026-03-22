@@ -106,3 +106,17 @@ def test_build_document_text_with_collections():
     text = build_document_text(item)
     assert "Paper" in text
     assert "RNA" in text
+
+
+def test_build_document_text_with_pdf():
+    item = {
+        "key": "P1",
+        "title": "Paper With PDF",
+        "creators": [],
+        "abstract": "Short abstract.",
+        "tags": [],
+    }
+    text = build_document_text(item, pdf_text="Full text of the paper extracted from PDF.")
+    assert "Paper With PDF" in text
+    assert "Short abstract." in text
+    assert "Full text of the paper extracted from PDF." in text
