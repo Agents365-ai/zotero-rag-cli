@@ -163,6 +163,39 @@ def clear(ctx: click.Context, yes: bool) -> None:
     click.echo("Cleared all indexes.")
 
 
+@main.command("config")
+@click.argument("key", required=False)
+@click.argument("value", required=False)
+@click.pass_context
+def config_cmd(ctx: click.Context, key: str | None, value: str | None) -> None:
+    """Show or set configuration values."""
+    from rak.config import CONFIGURABLE_KEYS, load_config, save_config
+
+    config: RakConfig = ctx.obj["config"]
+
+    if key and value:
+        if key not in CONFIGURABLE_KEYS:
+            click.echo(f"Unknown config key: {key}", err=True)
+            click.echo(f"Valid keys: {', '.join(sorted(CONFIGURABLE_KEYS))}", err=True)
+            ctx.exit(1)
+            return
+        save_config(config.data_dir, key, value)
+        click.echo(f"{key} = {value}")
+    elif key:
+        if hasattr(config, key):
+            click.echo(f"{key} = {getattr(config, key)}")
+        else:
+            click.echo(f"Unknown config key: {key}", err=True)
+            ctx.exit(1)
+    else:
+        click.echo(f"model_name = {config.model_name}")
+        click.echo(f"zot_command = {config.zot_command}")
+        click.echo(f"llm_base_url = {config.llm_base_url}")
+        click.echo(f"llm_model = {config.llm_model}")
+        click.echo(f"data_dir = {config.data_dir}")
+        click.echo(f"zotero_storage_dir = {config.zotero_storage_dir}")
+
+
 @main.command()
 @click.argument("query")
 @click.option("--hybrid", is_flag=True, help="Use hybrid search (vector + BM25)")

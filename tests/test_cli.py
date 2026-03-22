@@ -191,3 +191,10 @@ def test_ask_help():
     assert "--llm-url" in result.output
     assert "--collection" in result.output
     assert "--tag" in result.output
+
+
+def test_config_help():
+    runner = CliRunner()
+    result = runner.invoke(main, ["config", "--help"])
+    assert result.exit_code == 0
+    assert "Show or set" in result.output
