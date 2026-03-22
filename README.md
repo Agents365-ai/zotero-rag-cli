@@ -1,200 +1,277 @@
-# rak — RAG Knowledge Search for Zotero
+# rak — Zotero 文献库 RAG 语义搜索
 
-Semantic and hybrid search over your Zotero library, powered by local embeddings. Ask questions with a local LLM.
+[English](README_EN.md)
 
-## Install
+## 简介
+
+`rak` 是一个本地化的 Zotero RAG 搜索工具，专为 [Claude Code](https://claude.ai/code) 设计。
+
+**核心特性：**
+- **语义搜索**：基于 sentence-transformers 本地嵌入，理解查询意图
+- **混合搜索**：向量搜索 + BM25 关键词搜索，RRF 融合排序
+- **PDF 全文**：自动提取 PDF 全文并分块索引（512 词，64 词重叠）
+- **LLM 问答**：基于本地大模型（Ollama/LMStudio）回答问题
+- **多轮对话**：交互式 REPL，维护对话历史，支持话题切换
+- **全程离线**：搜索无需 API Key，所有数据留在本地
+
+## 安装
 
 ```bash
+# 推荐
 uv tool install zotero-rag-cli
-# or
+
+# 或者
 pip install zotero-rag-cli
 ```
 
-Requires `zot` ([zotero-cli-cc](https://github.com/Agents365-ai/zotero-cli-cc)) to be installed and working.
+需要先安装 `zot` ([zotero-cli-cc](https://github.com/Agents365-ai/zotero-cli-cc))。
 
-## Quick Start
+## 快速开始
 
 ```bash
-# 1. Index your Zotero library (incremental by default, extracts PDF full text)
+# 1. 索引 Zotero 文献库（增量索引，自动提取 PDF 全文 + 分块）
 rak index
 
-# 2. Semantic search
-rak search "cell fate determination mechanisms"
+# 2. 语义搜索
+rak search "细胞命运决定机制"
 
-# 3. Hybrid search (semantic + keyword BM25)
+# 3. 混合搜索（语义 + 关键词 BM25）
 rak search "spatial transcriptomics" --hybrid
 
-# 4. Ask a question (requires Ollama or LMStudio running locally)
-rak ask "What are the main methods for single-cell clustering?"
+# 4. 提问（需要本地运行 Ollama 或 LMStudio）
+rak ask "单细胞聚类的主要方法有哪些？"
 
-# 5. Interactive multi-turn chat over your papers
+# 5. 交互式多轮对话
 rak chat
 ```
 
-## Commands
+## 命令一览
 
-### Index
+### 索引
 
 ```bash
-rak index                    # Incremental index (only new/changed items)
-rak index --full             # Force full rebuild
-rak index --limit 500        # Limit items fetched from zot
+rak index                    # 增量索引（仅处理新增/变更项目）
+rak index --full             # 全量重建
+rak index --limit 500        # 限制从 zot 获取的项目数
 ```
 
-Automatically extracts PDF full text from `~/Zotero/storage/` if available. Long documents are split into overlapping chunks (512 words, 64 overlap) for better Q&A accuracy.
+自动从 `~/Zotero/storage/` 提取 PDF 全文。长文档自动分割为重叠片段，提升问答准确率。
 
-### Search
+### 搜索
 
 ```bash
-rak search "single cell RNA sequencing methods"
-rak search "CRISPR off-target effects" --hybrid
+rak search "单细胞 RNA 测序方法"
+rak search "CRISPR 脱靶效应" --hybrid
 rak search "attention mechanism" --limit 5
 rak search "RNA-seq" --collection "My Papers" --tag "methods"
 rak --json search "spatial omics"
 ```
 
-### Ask (LLM Q&A)
+### 提问（LLM 问答）
 
 ```bash
-rak ask "What are the main findings about cell fate?"
-rak ask "Compare CRISPR methods" --context 10 --hybrid
-rak ask "Summarize spatial omics" --llm-model mistral --llm-url http://localhost:1234/v1
+rak ask "关于细胞命运的主要发现是什么？"
+rak ask "比较 CRISPR 方法" --context 10 --hybrid
+rak ask "总结空间组学" --llm-model mistral --llm-url http://localhost:1234/v1
 ```
 
-Requires a local OpenAI-compatible LLM server (Ollama, LMStudio, vLLM). Default: Ollama at `localhost:11434`.
+需要本地 OpenAI 兼容 LLM 服务（Ollama、LMStudio、vLLM）。默认：Ollama `localhost:11434`。
 
-### Chat (Multi-turn Q&A)
+### 多轮对话
 
 ```bash
-rak chat                                # Start interactive session
-rak chat --hybrid --context 10          # With hybrid search and more context
-rak chat --collection "My Papers"       # Filtered to a collection
+rak chat                                # 启动交互会话
+rak chat --hybrid --context 10          # 混合搜索 + 更多上下文
+rak chat --collection "My Papers"       # 限定 collection
 ```
 
-Interactive REPL for multi-turn conversations over your papers. Maintains conversation history across turns. Commands inside chat:
+交互式 REPL，支持多轮对话和话题切换：
 
-| Command | Purpose |
-|---------|---------|
-| `/search <query>` | Retrieve new papers and reset conversation |
-| `/context` | Show current paper list |
-| `/tokens` | Show estimated token usage and turn count |
-| `/help` | Show available commands |
-| `/quit` | Exit chat session |
+| 命令 | 功能 |
+|------|------|
+| `/search <查询>` | 检索新论文，重置对话 |
+| `/context` | 显示当前论文列表 |
+| `/tokens` | 显示估算 token 用量和对话轮次 |
+| `/help` | 显示帮助信息 |
+| `/quit` | 退出对话 |
 
-### Export
+### 导出
 
 ```bash
-rak export "single cell" --format csv                    # CSV to stdout
-rak export "CRISPR" --format bibtex --output refs.bib    # BibTeX to file
-rak export "RNA-seq" --hybrid --collection "Methods"     # With filters
+rak export "single cell" --format csv                    # CSV 输出
+rak export "CRISPR" --format bibtex --output refs.bib    # BibTeX 导出到文件
+rak export "RNA-seq" --hybrid --collection "Methods"     # 带过滤条件
 ```
 
-### Config
+### 配置
 
 ```bash
-rak config                           # Show all settings
-rak config llm_model mistral         # Set LLM model persistently
+rak config                           # 显示所有设置
+rak config llm_model mistral         # 持久化设置 LLM 模型
 rak config llm_base_url http://localhost:1234/v1
 ```
 
-### Status & Clear
+### 状态与清除
 
 ```bash
-rak status                  # Show index stats (item count, model, last indexed)
-rak clear                   # Delete all indexes (with confirmation)
-rak clear --yes             # Skip confirmation
+rak status                  # 显示索引状态（项目数、模型、最后索引时间）
+rak clear                   # 删除所有索引（需确认）
+rak clear --yes             # 跳过确认
 ```
 
-### Shell Completions
+### Shell 补全
 
 ```bash
-rak completion bash          # Generate bash completions
-rak completion zsh           # Generate zsh completions
-rak completion fish          # Generate fish completions
-rak completion               # Auto-detect shell
+rak completion bash          # 生成 bash 补全脚本
+rak completion zsh           # 生成 zsh 补全脚本
+rak completion fish          # 生成 fish 补全脚本
+rak completion               # 自动检测 shell
 
-# Enable completions (add to your shell profile):
+# 启用补全（添加到 shell 配置文件）：
 eval "$(rak completion)"
 ```
 
-## How It Works
+## 同类工具对比
+
+| 特性 | **rak** | [zotero-mcp](https://github.com/54yyyu/zotero-mcp) | [cookjohn/zotero-mcp](https://github.com/cookjohn/zotero-mcp) | [ZoteroBridge](https://github.com/Combjellyshen/ZoteroBridge) |
+|---|:---:|:---:|:---:|:---:|
+| **语义搜索** | **✅** | ✅ | ✅ | ❌ |
+| **混合搜索（向量 + BM25）** | **✅** | ❌ | ❌ | ❌ |
+| **PDF 分块索引** | **✅** | ❌ | ❌ | ❌ |
+| **LLM 问答** | **✅ 本地** | 云 API | 云 API | 云 API |
+| **多轮对话** | **✅** | ❌ | ❌ | ❌ |
+| **流式输出** | **✅** | ❌ | ❌ | ❌ |
+| **100% 本地 / 无需 API Key** | **✅** | ❌ | ❌ | ❌ |
+| **CLI 终端使用** | **✅** | ❌ | ❌ | ❌ |
+| **MCP 协议** | ❌ | ✅ | ✅ | ✅ |
+| **Collection/标签过滤** | **✅** | ✅ | ✅ | ✅ |
+| **BibTeX/CSV 导出** | **✅** | ❌ | ❌ | ❌ |
+| **增量索引** | **✅** | N/A | N/A | N/A |
+| **Shell 补全** | **✅** | ❌ | ❌ | ❌ |
+| **JSON 输出** | **✅** | N/A | N/A | N/A |
+| **AI 编码助手集成** | **✅ Claude Code** | Claude/ChatGPT | Claude/Cursor | Claude/Cursor |
+| **语言** | Python | Python | TypeScript | TypeScript |
+| **活跃维护** | ✅ 2026 | ✅ 2026 | ✅ 2026 | ✅ 2026 |
+
+### 为什么选择 rak？
+
+> **唯一一个提供本地语义搜索、混合检索和 LLM 问答的 Zotero CLI 工具 — 全程无需 API Key 或云服务。**
+
+- **本地化**：所有计算在本机运行 — 嵌入、搜索、LLM
+- **高速**：增量索引，毫秒级向量搜索
+- **精准**：PDF 分块 + 混合搜索（语义 + BM25 RRF 融合）
+- **隐私**：论文数据永不离开本机
+- **AI 原生**：专为 Claude Code 设计，`--json` 输出供 AI 解析
+- **终端原生**：完整 CLI + Shell 补全，MCP 工具无法在终端中使用
+
+## 架构
 
 ```
-rak index                    rak search "query"          rak ask "question"
-    │                            │                           │
-    ▼                            ▼                           ▼
-zot --json list              Embedder                    Searcher
-    │                         │      │                       │
-    ▼                    ┌────▼──┐   │                  Retrieved
-Embedder + PDF           │Vector │   │                   Papers
-    │  + Chunking        │Search │   │                       │
-    ▼                   └───┬───┘   │                       ▼
-┌────────┐                  │       │                   Local LLM
-│ChromaDB│ ◄────────────────┘       │                  (Ollama/etc)
-└────────┘                          │                       │
-┌────────┐              ┌───▼───┐   │                   Answer +
-│FTS5 DB │ ◄────────────│ BM25  │◄──┘ (--hybrid)       Sources
-└────────┘              └───┬───┘
-                            │
-                       RRF Fusion
-                            │
-                        Results
+┌─────────────────────────────────────┐
+│          rak CLI (Click)            │
+│ index│search│ask│chat│export│config │
+└──────────────┬──────────────────────┘
+               │
+┌──────────────▼──────────────────────┐
+│           核心管线                   │
+│  Embedder (sentence-transformers)   │
+│  + PDF 提取器 + 文本分块器          │
+└───────┬────────────────┬────────────┘
+        │                │
+   ┌────▼────┐    ┌──────▼──────┐
+   │ChromaDB │    │ SQLite FTS5 │
+   │(向量)    │    │ (关键词)     │
+   └────┬────┘    └──────┬──────┘
+        │                │
+   ┌────▼────────────────▼────┐
+   │  Searcher (RRF 融合排序)  │
+   └────────────┬─────────────┘
+                │
+   ┌────────────▼─────────────┐
+   │  本地 LLM (Ollama 等)     │
+   │  ask / chat / stream     │
+   └──────────────────────────┘
 ```
 
-## Options
+## 搭配 zot 使用
 
-| Flag | Commands | Purpose |
-|------|----------|---------|
-| `--json` | Global | JSON output |
-| `--model NAME` | Global | Embedding model (default: all-MiniLM-L6-v2) |
-| `--hybrid` | search, ask, chat, export | Enable hybrid search (vector + BM25) |
-| `--limit N` | search, export | Number of results (default: 10) |
-| `--collection NAME` | search, ask, chat, export | Filter by Zotero collection |
-| `--tag TAG` | search, ask, chat, export | Filter by tag (repeatable, OR logic) |
-| `--full` | index | Force full rebuild |
-| `--context N` | ask, chat | Number of context documents (default: 5) |
-| `--llm-model NAME` | ask, chat | Override LLM model |
-| `--llm-url URL` | ask, chat | Override LLM server URL |
-| `--format csv\|bibtex` | export | Export format (default: csv) |
-| `--output FILE` | export | Write to file instead of stdout |
+`rak` 专为搭配 [`zot`](https://github.com/Agents365-ai/zotero-cli-cc) 使用：
 
-## Embedding Models
-
-| Model | Size | Best For |
-|-------|------|----------|
-| `all-MiniLM-L6-v2` (default) | ~80MB | English papers, fast |
-| `nomic-ai/nomic-embed-text-v1.5` | ~270MB | Multilingual, more accurate |
-
-Switch model:
 ```bash
-rak --model nomic-ai/nomic-embed-text-v1.5 index --full
-rak --model nomic-ai/nomic-embed-text-v1.5 search "query"
-```
-
-## Use with zot
-
-`rak` is designed to work alongside [`zot`](https://github.com/Agents365-ai/zotero-cli-cc):
-
-```bash
-# zot: exact keyword search (fast, precise)
+# zot：精确搜索 + CRUD（快速、精确）
 zot search "single cell"
+zot read ABC123
+zot note ABC123 --add "关键发现：..."
 
-# rak: semantic search (understands meaning)
-rak search "methods for analyzing individual cell transcriptomes"
+# rak：语义搜索 + LLM 问答（理解语义）
+rak search "分析单个细胞转录组的方法"
+rak ask "主要的单细胞聚类方法有哪些？"
 
-# rak hybrid: best of both
+# 结合使用
 rak search "scRNA-seq clustering" --hybrid
 ```
 
-## Use with Claude Code
+| 工具 | 优势 | 适用场景 |
+|------|------|----------|
+| `zot` | 精确匹配、CRUD、笔记、标签 | 明确知道要找什么 |
+| `rak` | 语义理解、问答 | 探索性搜索或提问 |
+| 两者结合 | 混合搜索 | 需要全面的检索结果 |
 
-`rak` works directly inside Claude Code via the Bash tool — just ask Claude to search your papers:
+## 在 Claude Code 中使用
+
+在任何 Claude Code 会话中，直接用自然语言请求：
 
 ```
-> search my Zotero for papers about transformer attention
-> ask rak what methods improve attention efficiency
+帮我搜索 Zotero 中关于 transformer attention 的论文
+→ Claude 自动运行: rak --json search "transformer attention"
+
+我的论文中关于注意力效率有什么发现？
+→ Claude 自动运行: rak ask "What methods improve attention efficiency?"
+
+导出 CRISPR 相关论文为 BibTeX
+→ Claude 自动运行: rak export "CRISPR" --format bibtex --output refs.bib
 ```
 
-## License
+建议在 `~/.claude/CLAUDE.md` 中添加：
+
+```markdown
+### Zotero RAG
+- 使用 `rak` 进行语义搜索和 LLM 问答
+- 使用 `zot` 进行精确搜索、CRUD、笔记、标签、导出
+- 处理结果时使用 `--json` 标志
+```
+
+### 相关项目
+
+- **[zotero-cli-cc](https://github.com/Agents365-ai/zotero-cli-cc)** — Zotero CLI CRUD 工具，`rak` 的必要依赖
+- **[54yyyu/zotero-mcp](https://github.com/54yyyu/zotero-mcp)** — 基于 MCP 协议的 Zotero 语义搜索集成
+- **[cookjohn/zotero-mcp](https://github.com/cookjohn/zotero-mcp)** — MCP Zotero 集成，支持 Claude/Cursor
+- **[Combjellyshen/ZoteroBridge](https://github.com/Combjellyshen/ZoteroBridge)** — Zotero Bridge AI 编码助手集成
+
+---
+
+## 支持作者
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="https://raw.githubusercontent.com/Agents365-ai/images_payment/main/qrcode/wechat-pay.png" width="180" alt="微信支付">
+      <br>
+      <b>微信支付</b>
+    </td>
+    <td align="center">
+      <img src="https://raw.githubusercontent.com/Agents365-ai/images_payment/main/qrcode/alipay.png" width="180" alt="支付宝">
+      <br>
+      <b>支付宝</b>
+    </td>
+    <td align="center">
+      <img src="https://raw.githubusercontent.com/Agents365-ai/images_payment/main/qrcode/buymeacoffee.png" width="180" alt="Buy Me a Coffee">
+      <br>
+      <b>Buy Me a Coffee</b>
+    </td>
+  </tr>
+</table>
+
+## 许可证
 
 MIT
