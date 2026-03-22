@@ -354,12 +354,15 @@ graph LR
 - **Flexible**: CLI for terminal and Claude Code, MCP for LM Studio and Cursor
 - **Private**: Paper data never leaves your machine
 
+## TODO
+
+- [ ] Add `doc_id` uniqueness guard in BM25 index to prevent duplicate insertions inflating scores
+- [ ] Rename `get_by_metadata` → `get_ids_by_metadata` to clarify API semantics
+- [ ] Add `--verbose` global flag to enable debug-level logging for troubleshooting
+
 ## Related Projects
 
 - **[zotero-cli-cc](https://github.com/Agents365-ai/zotero-cli-cc)** — Zotero CLI for CRUD (required dependency)
-- **[54yyyu/zotero-mcp](https://github.com/54yyyu/zotero-mcp)** — MCP-based Zotero semantic search
-- **[cookjohn/zotero-mcp](https://github.com/cookjohn/zotero-mcp)** — MCP Zotero integration
-- **[Combjellyshen/ZoteroBridge](https://github.com/Combjellyshen/ZoteroBridge)** — Zotero Bridge for AI assistants
 
 ---
 

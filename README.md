@@ -354,12 +354,15 @@ graph LR
 - **灵活**：CLI 给终端和 Claude Code，MCP 给 LM Studio 和 Cursor
 - **隐私**：论文数据永不离开本机
 
+## TODO
+
+- [ ] BM25 索引添加 `doc_id` 唯一性约束，防止重复插入导致评分膨胀
+- [ ] 重命名 `get_by_metadata` → `get_ids_by_metadata`，明确接口语义
+- [ ] 添加 `--verbose` 全局选项，启用 debug 级别日志输出便于排查问题
+
 ## 相关项目
 
 - **[zotero-cli-cc](https://github.com/Agents365-ai/zotero-cli-cc)** — Zotero CLI CRUD 工具（`rak` 的前置依赖）
-- **[54yyyu/zotero-mcp](https://github.com/54yyyu/zotero-mcp)** — MCP 协议 Zotero 语义搜索
-- **[cookjohn/zotero-mcp](https://github.com/cookjohn/zotero-mcp)** — MCP Zotero 集成
-- **[Combjellyshen/ZoteroBridge](https://github.com/Combjellyshen/ZoteroBridge)** — Zotero Bridge AI 集成
 
 ---
 
