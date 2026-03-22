@@ -6,13 +6,24 @@
 
 `rak` 是一个本地化的 Zotero RAG 搜索工具，专为 [Claude Code](https://claude.ai/code) 设计。
 
+### 三种工作模式
+
+| 模式 | 命令 | 用途 | 需要 LLM？ |
+|------|------|------|:---:|
+| **搜索模式** | `rak search` / `rak export` | 语义/混合检索，导出结果 | 不需要 |
+| **问答模式** | `rak ask` | 单轮问答，适合脚本和 AI 助手调用 | 需要 |
+| **对话模式** | `rak chat` | 多轮交互对话，适合人工深入探讨 | 需要 |
+
+- **搜索模式**：纯本地向量/关键词检索，完全离线，无需 API Key
+- **问答模式**：搜索 + LLM 生成回答，单次调用返回结果。专为程序调用设计（Claude Code、管道、脚本），支持 `--json` 输出
+- **对话模式**：搜索 + LLM 多轮对话，维护上下文历史。专为人机交互设计，支持 `/search` 切换话题、`/tokens` 查看用量
+
 **核心特性：**
 - **语义搜索**：基于 sentence-transformers 本地嵌入，理解查询意图
 - **混合搜索**：向量搜索 + BM25 关键词搜索，RRF 融合排序
 - **PDF 全文**：自动提取 PDF 全文并分块索引（512 词，64 词重叠）
-- **LLM 问答**：基于本地大模型（Ollama/LMStudio）回答问题
-- **多轮对话**：交互式 REPL，维护对话历史，支持话题切换
-- **全程离线**：搜索无需 API Key，所有数据留在本地
+- **多 LLM 支持**：本地（Ollama/LMStudio）或云端（DeepSeek/OpenAI/任何 OpenAI 兼容 API）
+- **全程离线**：搜索模式无需 API Key，所有数据留在本地
 
 ## 安装
 
@@ -75,7 +86,7 @@ rak ask "比较 CRISPR 方法" --context 10 --hybrid
 rak ask "总结空间组学" --llm-model mistral --llm-url http://localhost:1234/v1
 ```
 
-需要本地 OpenAI 兼容 LLM 服务（Ollama、LMStudio、vLLM）。默认：Ollama `localhost:11434`。
+需要 LLM 服务。支持本地（Ollama、LMStudio、vLLM）或云端（DeepSeek、OpenAI 等 OpenAI 兼容 API）。
 
 ### 多轮对话
 
@@ -109,6 +120,26 @@ rak export "RNA-seq" --hybrid --collection "Methods"     # 带过滤条件
 rak config                           # 显示所有设置
 rak config llm_model mistral         # 持久化设置 LLM 模型
 rak config llm_base_url http://localhost:1234/v1
+rak config llm_api_key sk-xxx        # 设置 API Key（云端 LLM 需要）
+```
+
+#### LLM 配置示例
+
+```bash
+# DeepSeek（推荐云端方案）
+rak config llm_base_url https://api.deepseek.com
+rak config llm_model deepseek-chat
+rak config llm_api_key sk-your-deepseek-key
+
+# OpenAI
+rak config llm_base_url https://api.openai.com/v1
+rak config llm_model gpt-4o
+rak config llm_api_key sk-your-openai-key
+
+# 本地 Ollama（默认，无需 API Key）
+rak config llm_base_url http://localhost:11434/v1
+rak config llm_model llama3
+rak config llm_api_key not-needed
 ```
 
 ### 状态与清除

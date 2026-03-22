@@ -4,6 +4,18 @@
 
 Semantic and hybrid search over your Zotero library, powered by local embeddings. Ask questions with a local LLM. Everything runs locally — no API keys needed for search.
 
+### Three Working Modes
+
+| Mode | Command | Use Case | LLM Required? |
+|------|---------|----------|:---:|
+| **Search** | `rak search` / `rak export` | Semantic/hybrid retrieval, export results | No |
+| **Ask** | `rak ask` | Single-turn Q&A, for scripts and AI assistants | Yes |
+| **Chat** | `rak chat` | Multi-turn interactive conversation | Yes |
+
+- **Search mode**: Pure local vector/keyword retrieval, fully offline, no API key needed
+- **Ask mode**: Search + LLM answer in a single call. Designed for programmatic use (Claude Code, pipelines, scripts), supports `--json` output
+- **Chat mode**: Search + LLM multi-turn conversation with context history. Designed for human interaction, supports `/search` to switch topics, `/tokens` to track usage
+
 ## Install
 
 ```bash
@@ -65,7 +77,7 @@ rak ask "Compare CRISPR methods" --context 10 --hybrid
 rak ask "Summarize spatial omics" --llm-model mistral --llm-url http://localhost:1234/v1
 ```
 
-Requires a local OpenAI-compatible LLM server (Ollama, LMStudio, vLLM). Default: Ollama at `localhost:11434`.
+Requires an LLM service. Supports local (Ollama, LMStudio, vLLM) or cloud (DeepSeek, OpenAI, any OpenAI-compatible API).
 
 ### Chat (Multi-turn Q&A)
 
@@ -99,6 +111,26 @@ rak export "RNA-seq" --hybrid --collection "Methods"     # With filters
 rak config                           # Show all settings
 rak config llm_model mistral         # Set LLM model persistently
 rak config llm_base_url http://localhost:1234/v1
+rak config llm_api_key sk-xxx        # Set API key (for cloud LLMs)
+```
+
+#### LLM Configuration Examples
+
+```bash
+# DeepSeek (recommended cloud option)
+rak config llm_base_url https://api.deepseek.com
+rak config llm_model deepseek-chat
+rak config llm_api_key sk-your-deepseek-key
+
+# OpenAI
+rak config llm_base_url https://api.openai.com/v1
+rak config llm_model gpt-4o
+rak config llm_api_key sk-your-openai-key
+
+# Local Ollama (default, no API key needed)
+rak config llm_base_url http://localhost:11434/v1
+rak config llm_model llama3
+rak config llm_api_key not-needed
 ```
 
 ### Status & Clear
