@@ -51,8 +51,8 @@ class VectorStore:
         """Retrieve documents/metadatas by IDs."""
         return self._collection.get(ids=ids, include=include or ["documents"])
 
-    def get_by_metadata(self, where: dict) -> dict:
-        """Query documents by metadata filter."""
+    def get_ids_by_metadata(self, where: dict) -> dict:
+        """Query document IDs by metadata filter."""
         return self._collection.get(where=where, include=[])
 
     def has(self, doc_id: str) -> bool:

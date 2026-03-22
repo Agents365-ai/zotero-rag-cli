@@ -114,7 +114,7 @@ def _delete_chunks(vector_store: VectorStore, key: str) -> None:
     vector_store.delete([key])
     # Delete any chunks (query by parent_key metadata)
     try:
-        results = vector_store.get_by_metadata(where={"parent_key": key})
+        results = vector_store.get_ids_by_metadata(where={"parent_key": key})
         if results["ids"]:
             vector_store.delete(results["ids"])
     except Exception as exc:

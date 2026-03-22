@@ -11,9 +11,13 @@ from rak.errors import EmptyLibraryError, ModelDownloadError, ZotNotFoundError
 @click.version_option(version=__version__, prog_name="rak")
 @click.option("--json", "output_json", is_flag=True, help="Output as JSON")
 @click.option("--model", default=None, help="Embedding model name")
+@click.option("--verbose", is_flag=True, help="Enable debug logging")
 @click.pass_context
-def main(ctx: click.Context, output_json: bool, model: str | None) -> None:
+def main(ctx: click.Context, output_json: bool, model: str | None, verbose: bool) -> None:
     """rak — Semantic search over your Zotero library."""
+    if verbose:
+        import logging
+        logging.basicConfig(level=logging.DEBUG, format="%(name)s %(levelname)s: %(message)s")
     ctx.ensure_object(dict)
     ctx.obj["json"] = output_json
     config = RakConfig()

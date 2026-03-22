@@ -16,6 +16,7 @@ class BM25Index:
         self._conn.commit()
 
     def add(self, doc_id: str, content: str) -> None:
+        self._conn.execute("DELETE FROM papers_fts WHERE doc_id = ?", (doc_id,))
         self._conn.execute(
             "INSERT INTO papers_fts (doc_id, content) VALUES (?, ?)",
             (doc_id, content),

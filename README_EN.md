@@ -376,9 +376,9 @@ graph LR
 
 ## TODO
 
-- [ ] Add `doc_id` uniqueness guard in BM25 index to prevent duplicate insertions inflating scores
-- [ ] Rename `get_by_metadata` → `get_ids_by_metadata` to clarify API semantics
-- [ ] Add `--verbose` global flag to enable debug-level logging for troubleshooting
+- [x] Add `doc_id` uniqueness guard in BM25 index to prevent duplicate insertions inflating scores
+- [x] Rename `get_by_metadata` → `get_ids_by_metadata` to clarify API semantics
+- [x] Add `--verbose` global flag to enable debug-level logging for troubleshooting
 
 ## Related Projects
 

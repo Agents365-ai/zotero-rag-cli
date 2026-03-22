@@ -376,9 +376,9 @@ graph LR
 
 ## TODO
 
-- [ ] BM25 索引添加 `doc_id` 唯一性约束，防止重复插入导致评分膨胀
-- [ ] 重命名 `get_by_metadata` → `get_ids_by_metadata`，明确接口语义
-- [ ] 添加 `--verbose` 全局选项，启用 debug 级别日志输出便于排查问题
+- [x] BM25 索引添加 `doc_id` 唯一性约束，防止重复插入导致评分膨胀
+- [x] 重命名 `get_by_metadata` → `get_ids_by_metadata`，明确接口语义
+- [x] 添加 `--verbose` 全局选项，启用 debug 级别日志输出便于排查问题
 
 ## 相关项目
 
