@@ -53,10 +53,14 @@ def search_papers(query: str, limit: int = 10, hybrid: bool = False,
 
     bm25.close()
 
-    return json.dumps([
-        {"key": r.doc_id, "title": r.title, "score": round(r.score, 4), "source": r.source}
-        for r in results
-    ], indent=2, ensure_ascii=False)
+    output = []
+    for r in results:
+        item = {"key": r.doc_id, "title": r.title, "score": round(r.score, 4), "source": r.source}
+        if r.snippet:
+            item["snippet"] = r.snippet
+        output.append(item)
+
+    return json.dumps(output, indent=2, ensure_ascii=False)
 
 
 @mcp.tool()

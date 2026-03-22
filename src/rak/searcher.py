@@ -13,6 +13,7 @@ class SearchResult:
     score: float
     title: str = ""
     source: str = ""
+    snippet: str = ""
 
 
 def rrf_fuse(
@@ -57,13 +58,14 @@ def build_where_filter(
 
 
 def _deduplicate_chunks(results: list[SearchResult]) -> list[SearchResult]:
-    """Deduplicate chunk results back to parent papers, keeping the best score."""
+    """Deduplicate chunk results back to parent papers, keeping the best score and snippet."""
     seen: dict[str, SearchResult] = {}
     for r in results:
         parent_key = r.doc_id.split("_chunk_")[0] if "_chunk_" in r.doc_id else r.doc_id
         if parent_key not in seen or r.score > seen[parent_key].score:
             seen[parent_key] = SearchResult(
                 doc_id=parent_key, score=r.score, title=r.title, source=r.source,
+                snippet=r.snippet,
             )
     return sorted(seen.values(), key=lambda x: x.score, reverse=True)
 
@@ -83,7 +85,12 @@ class Searcher:
         # Fetch extra results to account for chunk deduplication
         results = self._vector_store.search(embedding, limit=limit * 3, where=where)
         raw = [
-            SearchResult(doc_id=r["id"], score=r["score"], title=r.get("metadata", {}).get("title", ""), source="vector")
+            SearchResult(
+                doc_id=r["id"], score=r["score"],
+                title=r.get("metadata", {}).get("title", ""),
+                source="vector",
+                snippet=r.get("document", ""),
+            )
             for r in results
         ]
         return _deduplicate_chunks(raw)[:limit]

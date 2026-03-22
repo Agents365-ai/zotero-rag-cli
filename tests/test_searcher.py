@@ -74,14 +74,15 @@ def test_build_where_filter_none():
 
 def test_deduplicate_chunks_merges_same_parent():
     results = [
-        SearchResult(doc_id="ABC_chunk_0", score=0.9, title="Paper A", source="vector"),
-        SearchResult(doc_id="ABC_chunk_1", score=0.8, title="Paper A", source="vector"),
-        SearchResult(doc_id="DEF", score=0.7, title="Paper B", source="vector"),
+        SearchResult(doc_id="ABC_chunk_0", score=0.9, title="Paper A", source="vector", snippet="best chunk"),
+        SearchResult(doc_id="ABC_chunk_1", score=0.8, title="Paper A", source="vector", snippet="other chunk"),
+        SearchResult(doc_id="DEF", score=0.7, title="Paper B", source="vector", snippet="only chunk"),
     ]
     deduped = _deduplicate_chunks(results)
     ids = [r.doc_id for r in deduped]
     assert ids == ["ABC", "DEF"]
     assert deduped[0].score == 0.9
+    assert deduped[0].snippet == "best chunk"
 
 
 def test_deduplicate_chunks_no_chunks():

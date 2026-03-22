@@ -11,10 +11,13 @@ from rak.searcher import SearchResult
 
 def format_results(results: list[SearchResult], output_json: bool = False) -> str:
     if output_json:
-        return json.dumps(
-            [{"key": r.doc_id, "title": r.title, "score": round(r.score, 4), "source": r.source} for r in results],
-            indent=2, ensure_ascii=False,
-        )
+        items = []
+        for r in results:
+            item = {"key": r.doc_id, "title": r.title, "score": round(r.score, 4), "source": r.source}
+            if r.snippet:
+                item["snippet"] = r.snippet
+            items.append(item)
+        return json.dumps(items, indent=2, ensure_ascii=False)
     buf = StringIO()
     console = Console(file=buf, force_terminal=False, width=120)
     table = Table(show_header=True, header_style="bold")
