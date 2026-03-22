@@ -17,6 +17,44 @@ graph LR
     C --> D3[Terminal User<br/>ask / chat Q&A]
 ```
 
+## Three Retrieval Modes
+
+rak provides three retrieval modes for different scenarios:
+
+```mermaid
+graph LR
+    Q[User Query] --> E[Embedder]
+    E --> VS[Vector Search<br/>Understands Semantics]
+    VS --> R1[Results]
+```
+
+> **Vector Search** (default): Converts query into a vector and finds semantically similar papers in ChromaDB. Understands synonyms and cross-language expressions, e.g. "cell fate determination" matches "细胞命运决定".
+
+```mermaid
+graph LR
+    Q[User Query] --> BM[BM25 Search<br/>Keyword Matching]
+    BM --> R2[Results]
+```
+
+> **BM25 Keyword Search**: Matches keywords across all indexed content (title + abstract + PDF full text) and ranks by relevance using term frequency and document length — ensures papers containing exact keywords like "CRISPR-Cas9" are not missed.
+
+```mermaid
+graph LR
+    Q[User Query] --> VS[Vector Search]
+    Q --> BM[BM25 Search]
+    VS --> RRF[RRF Fusion Ranking]
+    BM --> RRF
+    RRF --> R3[Final Results]
+```
+
+> **Hybrid Search** (`--hybrid`): Runs both vector + BM25, fuses results via RRF (Reciprocal Rank Fusion). Combines semantic understanding with exact keyword matching — best overall accuracy.
+
+| Mode | Command | Strength | Best For |
+|------|---------|----------|----------|
+| **Vector** | `rak search "query"` | Semantic understanding | Exploratory queries |
+| **BM25** | Internal component of hybrid | Exact keywords, PDF full text | — |
+| **Hybrid** | `rak search "query" --hybrid` | Semantic + keywords, most accurate | Recommended default |
+
 ## Three Usage Modes
 
 ```mermaid
