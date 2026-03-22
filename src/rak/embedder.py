@@ -16,6 +16,9 @@ class Embedder:
             self._dimension: int | None = None
         else:
             try:
+                import logging
+                for name in ("sentence_transformers", "transformers", "safetensors"):
+                    logging.getLogger(name).setLevel(logging.WARNING)
                 from sentence_transformers import SentenceTransformer
                 self._model = SentenceTransformer(model_name, trust_remote_code=True)
             except Exception as exc:

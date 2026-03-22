@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`rak` — a local, CLI-first RAG search tool for Zotero libraries. Provides semantic search (ChromaDB + sentence-transformers), keyword search (SQLite FTS5) with Reciprocal Rank Fusion, PDF full-text extraction, collection/tag filtering, LLM Q&A via local models, and CSV/BibTeX export. Complements the `zot` CLI (zotero-cli-cc) which handles CRUD operations.
+`rak` — a local, CLI-first RAG search tool for Zotero libraries. Provides semantic search (ChromaDB + sentence-transformers or API embeddings), keyword search (SQLite FTS5) with Reciprocal Rank Fusion, PDF/Markdown full-text extraction, collection/tag filtering, LLM Q&A via local or remote models, and CSV/BibTeX export. Complements the `zot` CLI (zotero-cli-cc) which handles CRUD operations.
 
 ## Commands
 
@@ -23,7 +23,7 @@ pytest tests/test_searcher.py
 pytest tests/test_bm25.py::test_search_ranking
 
 # Run CLI
-rak index                          # Incremental index (auto PDF extraction)
+rak index                          # Incremental index (auto PDF/MD extraction)
 rak index --full                   # Full rebuild
 rak status                         # Show index stats
 rak clear --yes                    # Reset all indexes
@@ -31,9 +31,10 @@ rak config                         # Show settings
 rak config llm_model mistral       # Set config value
 rak search "query" --hybrid        # Hybrid search
 rak search "q" --collection X --tag Y  # Filtered search
-rak ask "question"                 # LLM Q&A (needs Ollama/LMStudio)
+rak ask "question"                 # LLM Q&A (needs Ollama/LMStudio/remote API)
 rak export "query" --format bibtex # Export as BibTeX
 rak --json search "query"          # JSON output
+rak --verbose search "query"       # Debug logging
 rak completion zsh                 # Generate shell completions
 ```
 
@@ -42,7 +43,7 @@ rak completion zsh                 # Generate shell completions
 All source is in `src/rak/`. The data flows through a pipeline:
 
 ```
-zot CLI → indexer (fetch + parse + PDF extract) → embedder → vector store (ChromaDB) + BM25 (SQLite FTS5)
+zot CLI → indexer (fetch + parse + PDF/MD extract) → embedder → vector store (ChromaDB) + BM25 (SQLite FTS5)
                                                                     ↓
                                       searcher (vector / hybrid with RRF fusion + collection/tag filters)
                                                                     ↓
@@ -51,33 +52,41 @@ zot CLI → indexer (fetch + parse + PDF extract) → embedder → vector store 
 
 **Key modules and their roles:**
 
-- **cli.py** — Click entry point (`rak`). Commands: `index`, `search`, `ask`, `chat`, `export`, `config`, `status`, `clear`, `completion`. Global flags: `--json`, `--model`.
-- **config.py** — `RakConfig` dataclass. Data stored in `~/Zotero/rak/`, auto-detect Zotero storage, LLM settings. Persistent config via `config.json`.
-- **embedder.py** — Wraps `SentenceTransformer`. `embed()` for single, `embed_batch()` for bulk (batch_size=32). Raises `ModelDownloadError` on failure.
-- **store.py** — `VectorStore` wrapping ChromaDB persistent client. Collection `rak_papers`, cosine distance. Supports `where` filter for metadata queries.
-- **bm25.py** — `BM25Index` using SQLite FTS5 virtual table for keyword search. Supports `delete()` for incremental updates.
-- **indexer.py** — Orchestrates: `fetch_zot_items()` shells out to `zot --json --limit list`, `build_document_text()` concatenates title/authors/abstract/tags/pdf_text, `diff_items()` computes add/update/remove sets, `index_items()` supports both full and incremental modes via registry. Long documents are chunked into overlapping segments stored as separate vectors.
-- **searcher.py** — `Searcher` with dependency-injected embedder/store/bm25. `build_where_filter()` builds ChromaDB metadata filters. `hybrid_search()` fuses vector + BM25 via `rrf_fuse(k=60)`. Chunk results are deduplicated to parent papers via `_deduplicate_chunks()`.
-- **formatter.py** — Rich tables, JSON output, incremental stats, and ask result formatting.
-- **pdf.py** — `extract_pdf_text()` via PyMuPDF, `find_pdf()` locates PDFs in Zotero storage. `chunk_text()` splits long text into overlapping word-level chunks (default 512 words, 64 overlap).
-- **llm.py** — `LLMClient` wrapping OpenAI SDK for local LLM chat completions (Ollama/LMStudio).
-- **export.py** — `to_csv()` and `to_bibtex()` formatters for search result export.
+- **cli.py** — Click entry point (`rak`). Commands: `index`, `search`, `ask`, `chat`, `export`, `config`, `status`, `clear`, `completion`. Global flags: `--json`, `--model`, `--verbose`.
+- **config.py** — `RakConfig` dataclass. Data stored in `~/Zotero/rak/`, auto-detect Zotero storage, LLM and embedding settings. Persistent config via `config.json`.
+- **embedder.py** — Supports two providers: `local` (SentenceTransformer) and `api` (OpenAI-compatible `/v1/embeddings`). `embed()` for single, `embed_batch()` for bulk. Suppresses noisy model loading output.
+- **store.py** — `VectorStore` wrapping ChromaDB persistent client. Collection `rak_papers`, cosine distance. `search()` clamps `n_results` to collection size. `get_ids_by_metadata()` returns IDs only.
+- **bm25.py** — `BM25Index` using SQLite FTS5 virtual table. `add()` ensures uniqueness via delete-before-insert. Implements context manager for safe resource cleanup.
+- **indexer.py** — Orchestrates: `fetch_zot_items()` shells out to `zot --json --limit list`, `build_document_text()` concatenates title/authors/abstract/tags/attachment_text, `diff_items()` computes add/update/remove sets with text cache to avoid redundant extraction, `index_items()` supports both full and incremental modes via registry. Long documents are chunked into overlapping segments stored as separate vectors.
+- **searcher.py** — `Searcher` with dependency-injected embedder/store/bm25. `build_where_filter()` builds ChromaDB metadata filters. `hybrid_search()` fuses vector + BM25 via `rrf_fuse(k=60)`. Chunk results are deduplicated to parent papers via `_deduplicate_chunks()`. Results include `snippet` from the best-matched chunk.
+- **formatter.py** — Rich tables, JSON output (with optional snippets), incremental stats, and ask result formatting.
+- **pdf.py** — `extract_pdf_text()` via PyMuPDF, `extract_file_text()` handles PDF and Markdown. `find_attachments()` locates all PDF/MD files per Zotero item. `chunk_text()` splits long text into overlapping word-level chunks (default 512 words, 64 overlap). Validates `overlap < chunk_size`.
+- **llm.py** — `LLMClient` wrapping OpenAI SDK for chat completions. Compatible with Ollama, LM Studio, OpenAI, DeepSeek, and any OpenAI-compatible endpoint.
+- **export.py** — `to_csv()` and `to_bibtex()` formatters with BibTeX special character escaping and proper Zotero-to-BibTeX type mapping.
 - **metadata.py** — `IndexMetadata` dataclass, `save_metadata()`/`load_metadata()` for tracking index state.
 - **registry.py** — Content hash registry (`registry.json`) for incremental indexing. `compute_hash()`, `save_registry()`, `load_registry()`.
 - **errors.py** — Custom exception hierarchy: `RakError` → `ZotNotFoundError`, `EmptyLibraryError`, `ModelDownloadError`.
+- **mcp_server.py** — MCP server exposing `search_papers` and `index_status` tools for AI assistants (Cursor, LM Studio). Registers `atexit` handler for cleanup.
 
 **Design decisions:**
-- All computation is local — no API keys needed for search. LLM Q&A uses local servers (Ollama/LMStudio).
+- All computation is local by default — no API keys needed for search. Embedding and LLM can optionally use remote APIs.
 - Data stored in `~/Zotero/rak/`: `chroma/` for vectors, `fts.sqlite` for keywords, `meta.json`, `registry.json`, `config.json`.
 - `zot` CLI is a required external dependency for data ingestion.
-- Indexing is incremental by default — content hashes detect new/changed/deleted items.
-- PDF extraction auto-detects `~/Zotero/storage/` and is silently skipped if unavailable.
-- Collections and tags stored as list metadata in ChromaDB for `$contains` filtering.
+- Indexing is incremental by default — content hashes detect new/changed/deleted items. PDF text is cached during indexing to avoid redundant extraction.
+- All PDF and Markdown attachments per Zotero item are extracted and merged for indexing.
+- BM25 `add()` uses delete-before-insert to prevent duplicate doc_ids.
+- All CLI commands use `with BM25Index(...)` context manager to prevent SQLite connection leaks.
+- `ask`/`chat` use search result snippets as LLM context instead of re-fetching documents.
+- BibTeX export escapes special characters (`\ { } & % # _ ~ ^`).
+- Config validates `chunk_overlap < chunk_size` at save time.
+
+**Configurable keys:**
+`model_name`, `zot_command`, `llm_base_url`, `llm_model`, `llm_api_key`, `chunk_size`, `chunk_overlap`, `embedding_provider` (`local`/`api`), `embedding_base_url`, `embedding_api_key`.
 
 ## Build System
 
-Uses `hatchling`. Entry point: `rak = "rak.cli:main"`. Package located at `src/rak/` (src layout).
+Uses `hatchling`. Entry point: `rak = "rak.cli:main"`, `rak-mcp = "rak.mcp_server:main"`. Package located at `src/rak/` (src layout).
 
 ## Testing
 
-98 tests. `@pytest.mark.network` marks tests requiring model downloads. CI runs `pytest -m "not network"`.
+128 tests. `@pytest.mark.network` marks tests requiring model downloads. CI runs `pytest -m "not network"`.
