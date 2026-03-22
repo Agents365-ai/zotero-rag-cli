@@ -8,7 +8,8 @@ from rak.cli import main
 def test_version():
     runner = CliRunner()
     result = runner.invoke(main, ["--version"])
-    assert "0.1.0" in result.output
+    from rak import __version__
+    assert __version__ in result.output
 
 
 def test_help():
@@ -219,3 +220,10 @@ def test_chat_help():
     assert "--context" in result.output
     assert "--hybrid" in result.output
     assert "--llm-model" in result.output
+
+
+def test_completion_help():
+    runner = CliRunner()
+    result = runner.invoke(main, ["completion", "--help"])
+    assert result.exit_code == 0
+    assert "shell completion" in result.output.lower()

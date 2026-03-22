@@ -11,7 +11,7 @@ NOMIC_MODEL = "nomic-ai/nomic-embed-text-v1.5"
 
 
 CONFIG_FILENAME = "config.json"
-CONFIGURABLE_KEYS = {"llm_base_url", "llm_model", "model_name", "zot_command"}
+CONFIGURABLE_KEYS = {"llm_base_url", "llm_model", "model_name", "zot_command", "chunk_size", "chunk_overlap"}
 
 
 def load_config(data_dir: Path) -> dict:
@@ -43,6 +43,8 @@ class RakConfig:
     zotero_storage_dir: Path | None = field(default_factory=detect_zotero_storage)
     llm_base_url: str = "http://localhost:11434/v1"
     llm_model: str = "llama3"
+    chunk_size: int = 512
+    chunk_overlap: int = 64
 
     def __post_init__(self) -> None:
         saved = load_config(self.data_dir)

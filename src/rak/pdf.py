@@ -22,3 +22,27 @@ def find_pdf(storage_dir: Path, item_key: str) -> Path | None:
         return None
     pdfs = list(key_dir.glob("*.pdf"))
     return pdfs[0] if pdfs else None
+
+
+def chunk_text(
+    text: str,
+    chunk_size: int = 512,
+    overlap: int = 64,
+) -> list[str]:
+    """Split text into overlapping word-level chunks.
+
+    Returns a list of chunk strings. If the text fits in one chunk,
+    returns a single-element list.
+    """
+    words = text.split()
+    if not words:
+        return []
+    if len(words) <= chunk_size:
+        return [text]
+    chunks = []
+    start = 0
+    while start < len(words):
+        end = start + chunk_size
+        chunks.append(" ".join(words[start:end]))
+        start = end - overlap
+    return chunks

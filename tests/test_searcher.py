@@ -1,6 +1,6 @@
 import pytest
 
-from rak.searcher import rrf_fuse, SearchResult
+from rak.searcher import _deduplicate_chunks, rrf_fuse, SearchResult
 
 
 def test_rrf_fuse_single_source():
@@ -70,3 +70,25 @@ def test_build_where_filter_collection_and_tags():
 def test_build_where_filter_none():
     f = build_where_filter(collection=None, tags=None)
     assert f is None
+
+
+def test_deduplicate_chunks_merges_same_parent():
+    results = [
+        SearchResult(doc_id="ABC_chunk_0", score=0.9, title="Paper A", source="vector"),
+        SearchResult(doc_id="ABC_chunk_1", score=0.8, title="Paper A", source="vector"),
+        SearchResult(doc_id="DEF", score=0.7, title="Paper B", source="vector"),
+    ]
+    deduped = _deduplicate_chunks(results)
+    ids = [r.doc_id for r in deduped]
+    assert ids == ["ABC", "DEF"]
+    assert deduped[0].score == 0.9
+
+
+def test_deduplicate_chunks_no_chunks():
+    results = [
+        SearchResult(doc_id="A", score=0.9, title="Paper", source="vector"),
+        SearchResult(doc_id="B", score=0.8, title="Paper 2", source="vector"),
+    ]
+    deduped = _deduplicate_chunks(results)
+    assert len(deduped) == 2
+    assert deduped[0].doc_id == "A"

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from rak.pdf import extract_pdf_text, find_pdf
+from rak.pdf import chunk_text, extract_pdf_text, find_pdf
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -36,3 +36,37 @@ def test_find_pdf_no_pdf_in_dir(tmp_path: Path):
     (key_dir / "snapshot.html").touch()
     result = find_pdf(tmp_path, "ABC12345")
     assert result is None
+
+
+def test_chunk_text_empty():
+    assert chunk_text("") == []
+
+
+def test_chunk_text_short():
+    text = "hello world this is a short text"
+    chunks = chunk_text(text, chunk_size=512)
+    assert len(chunks) == 1
+    assert chunks[0] == text
+
+
+def test_chunk_text_splits():
+    words = [f"word{i}" for i in range(100)]
+    text = " ".join(words)
+    chunks = chunk_text(text, chunk_size=30, overlap=10)
+    assert len(chunks) > 1
+    # Each chunk (except possibly last) should have ~30 words
+    first_words = chunks[0].split()
+    assert len(first_words) == 30
+    # Overlap: second chunk should start 20 words in
+    second_words = chunks[1].split()
+    assert second_words[0] == "word20"
+
+
+def test_chunk_text_overlap_content():
+    words = [f"w{i}" for i in range(50)]
+    text = " ".join(words)
+    chunks = chunk_text(text, chunk_size=20, overlap=5)
+    # Last words of chunk 0 should appear at start of chunk 1
+    c0_words = chunks[0].split()
+    c1_words = chunks[1].split()
+    assert c0_words[-5:] == c1_words[:5]

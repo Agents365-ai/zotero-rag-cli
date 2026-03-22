@@ -397,6 +397,30 @@ def export(
 
 
 @main.command()
+@click.argument("shell", type=click.Choice(["bash", "zsh", "fish"]), required=False)
+def completion(shell: str | None) -> None:
+    """Generate shell completion script.
+
+    Run: eval "$(rak completion bash)" or add to your shell profile.
+    """
+    import os
+    import subprocess as _sp
+
+    if shell is None:
+        parent = os.environ.get("SHELL", "")
+        if "zsh" in parent:
+            shell = "zsh"
+        elif "fish" in parent:
+            shell = "fish"
+        else:
+            shell = "bash"
+
+    env = {**os.environ, "_RAK_COMPLETE": f"{shell}_source"}
+    result = _sp.run(["rak"], capture_output=True, text=True, env=env)
+    click.echo(result.stdout)
+
+
+@main.command()
 @click.option("--context", "context_n", default=5, help="Number of documents to retrieve")
 @click.option("--hybrid", is_flag=True, help="Use hybrid search (vector + BM25)")
 @click.option("--collection", default=None, help="Filter by Zotero collection name")
@@ -457,7 +481,8 @@ def chat(
         click.echo(f"\nFound {len(session.context)} papers:")
         for i, doc in enumerate(session.context, 1):
             click.echo(f"  {i}. {doc['key']} - {doc['title']} (score: {doc['score']:.3f})")
-        click.echo(f"\nChat started. Commands: /search <query>, /context, /quit\n")
+        from rak.chat import HELP_TEXT
+        click.echo(f"\nChat started. Type /help for commands.\n")
 
         while True:
             try:
@@ -470,6 +495,12 @@ def chat(
                 continue
             if user_input == "/quit":
                 break
+            if user_input == "/help":
+                click.echo(HELP_TEXT)
+                continue
+            if user_input == "/tokens":
+                click.echo(f"Estimated tokens: ~{session.token_count:,} | Turns: {session.turn_count}")
+                continue
             if user_input == "/context":
                 for i, doc in enumerate(session.context, 1):
                     click.echo(f"  {i}. {doc['key']} - {doc['title']} (score: {doc['score']:.3f})")

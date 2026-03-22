@@ -9,7 +9,7 @@ from pathlib import Path
 from rak.bm25 import BM25Index
 from rak.embedder import Embedder
 from rak.errors import EmptyLibraryError, ZotNotFoundError
-from rak.pdf import extract_pdf_text, find_pdf
+from rak.pdf import chunk_text, extract_pdf_text, find_pdf
 from rak.registry import compute_hash
 from rak.store import VectorStore
 
@@ -90,6 +90,36 @@ def index_items(
     return _index_full(items, embedder, vector_store, bm25_index, on_progress, storage_dir)
 
 
+def _delete_chunks(vector_store: VectorStore, key: str) -> None:
+    """Delete a document and any associated chunks from the vector store."""
+    # Try deleting the base document
+    vector_store.delete([key])
+    # Delete any chunks (query by parent_key metadata)
+    try:
+        results = vector_store._collection.get(
+            where={"parent_key": key}, include=[]
+        )
+        if results["ids"]:
+            vector_store.delete(results["ids"])
+    except Exception:
+        pass
+
+
+def _build_metadata(item: dict) -> dict:
+    collections = item.get("collections", [])
+    tags = item.get("tags", [])
+    metadata = {
+        "title": item.get("title", ""),
+        "date": item.get("date", ""),
+        "item_type": item.get("item_type", ""),
+    }
+    if collections:
+        metadata["collections"] = collections
+    if tags:
+        metadata["tags"] = tags
+    return metadata
+
+
 def _index_full(
     items: list[dict],
     embedder: Embedder,
@@ -111,20 +141,20 @@ def _index_full(
         text = build_document_text(item, pdf_text=pdf_text)
         if not text.strip():
             continue
-        embedding = embedder.embed(text)
-        collections = item.get("collections", [])
-        tags = item.get("tags", [])
-        metadata = {
-            "title": item.get("title", ""),
-            "date": item.get("date", ""),
-            "item_type": item.get("item_type", ""),
-        }
-        if collections:
-            metadata["collections"] = collections
-        if tags:
-            metadata["tags"] = tags
-        vector_store.add(ids=[key], embeddings=[embedding], documents=[text], metadatas=[metadata])
+        metadata = _build_metadata(item)
+        # Store full document for BM25
         bm25_index.add(key, text)
+        # Store chunks (or whole doc if short) in vector store
+        chunks = chunk_text(text)
+        if len(chunks) <= 1:
+            embedding = embedder.embed(text)
+            vector_store.add(ids=[key], embeddings=[embedding], documents=[text], metadatas=[metadata])
+        else:
+            for ci, chunk in enumerate(chunks):
+                chunk_id = f"{key}_chunk_{ci}"
+                chunk_meta = {**metadata, "parent_key": key, "chunk_index": ci}
+                embedding = embedder.embed(chunk)
+                vector_store.add(ids=[chunk_id], embeddings=[embedding], documents=[chunk], metadatas=[chunk_meta])
         count += 1
         if on_progress and (i + 1) % 50 == 0:
             on_progress(i + 1, len(items))
@@ -156,22 +186,21 @@ def _index_incremental(
         text = build_document_text(item, pdf_text=pdf_text)
         if not text.strip():
             continue
-        embedding = embedder.embed(text)
-        collections = item.get("collections", [])
-        tags = item.get("tags", [])
-        metadata = {
-            "title": item.get("title", ""),
-            "date": item.get("date", ""),
-            "item_type": item.get("item_type", ""),
-        }
-        if collections:
-            metadata["collections"] = collections
-        if tags:
-            metadata["tags"] = tags
-        vector_store.add(ids=[key], embeddings=[embedding], documents=[text], metadatas=[metadata])
+        metadata = _build_metadata(item)
         if action == "update":
             bm25_index.delete(key)
+            _delete_chunks(vector_store, key)
         bm25_index.add(key, text)
+        chunks = chunk_text(text)
+        if len(chunks) <= 1:
+            embedding = embedder.embed(text)
+            vector_store.add(ids=[key], embeddings=[embedding], documents=[text], metadatas=[metadata])
+        else:
+            for ci, chunk in enumerate(chunks):
+                chunk_id = f"{key}_chunk_{ci}"
+                chunk_meta = {**metadata, "parent_key": key, "chunk_index": ci}
+                embedding = embedder.embed(chunk)
+                vector_store.add(ids=[chunk_id], embeddings=[embedding], documents=[chunk], metadatas=[chunk_meta])
         new_registry[key] = compute_hash(text)
         if action == "add":
             added += 1
@@ -181,7 +210,7 @@ def _index_incremental(
             on_progress(i + 1, len(work_items))
 
     for key in to_remove:
-        vector_store.delete([key])
+        _delete_chunks(vector_store, key)
         bm25_index.delete(key)
         del new_registry[key]
 

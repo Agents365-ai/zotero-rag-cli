@@ -7,6 +7,20 @@ from rak.llm import LLMClient, SYSTEM_PROMPT
 from rak.searcher import Searcher
 
 
+def estimate_tokens(text: str) -> int:
+    """Rough token estimate: ~4 chars per token for English text."""
+    return len(text) // 4
+
+
+HELP_TEXT = """\
+Commands:
+  /search <query>  — Retrieve new papers and reset conversation
+  /context         — Show current paper list
+  /tokens          — Show estimated token usage
+  /help            — Show this help message
+  /quit            — Exit chat session"""
+
+
 class ChatSession:
     def __init__(self, searcher: Searcher, llm: LLMClient, limit: int = 5,
                  collection: str | None = None, tags: list[str] | None = None,
@@ -19,6 +33,14 @@ class ChatSession:
         self._hybrid = hybrid
         self.context: list[dict] = []
         self.messages: list[dict] = []
+
+    @property
+    def token_count(self) -> int:
+        return sum(estimate_tokens(m["content"]) for m in self.messages)
+
+    @property
+    def turn_count(self) -> int:
+        return sum(1 for m in self.messages if m["role"] == "user")
 
     def search(self, query: str, vector_store=None) -> None:
         if self._hybrid:

@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-from rak.chat import ChatSession
+from rak.chat import ChatSession, estimate_tokens, HELP_TEXT
 from rak.searcher import SearchResult
 
 
@@ -81,3 +81,45 @@ def test_chat_session_search_resets_history():
     session.search("second query", vector_store=mock_store)
     assert len(session.messages) == 1  # only system message
     assert session.messages[0]["role"] == "system"
+
+
+def test_estimate_tokens():
+    assert estimate_tokens("hello world") > 0
+    assert estimate_tokens("") == 0
+    # ~4 chars per token
+    assert estimate_tokens("a" * 400) == 100
+
+
+def test_token_count_property():
+    results = [SearchResult(doc_id="A1", score=0.9, title="P", source="vector")]
+    searcher = _mock_searcher(results)
+    llm = _mock_llm(["Reply."])
+    session = ChatSession(searcher=searcher, llm=llm)
+    mock_store = MagicMock()
+    mock_store._collection.get.return_value = {"documents": ["Text."]}
+    session.search("query", vector_store=mock_store)
+    initial_tokens = session.token_count
+    assert initial_tokens > 0
+    list(session.ask("question"))
+    assert session.token_count > initial_tokens
+
+
+def test_turn_count_property():
+    results = [SearchResult(doc_id="A1", score=0.9, title="P", source="vector")]
+    searcher = _mock_searcher(results)
+    llm = _mock_llm(["R."])
+    session = ChatSession(searcher=searcher, llm=llm)
+    mock_store = MagicMock()
+    mock_store._collection.get.return_value = {"documents": ["T."]}
+    session.search("q", vector_store=mock_store)
+    assert session.turn_count == 0
+    list(session.ask("q1"))
+    assert session.turn_count == 1
+
+
+def test_help_text_contains_commands():
+    assert "/search" in HELP_TEXT
+    assert "/context" in HELP_TEXT
+    assert "/tokens" in HELP_TEXT
+    assert "/help" in HELP_TEXT
+    assert "/quit" in HELP_TEXT

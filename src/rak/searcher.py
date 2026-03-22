@@ -56,6 +56,18 @@ def build_where_filter(
     return {"$and": filters}
 
 
+def _deduplicate_chunks(results: list[SearchResult]) -> list[SearchResult]:
+    """Deduplicate chunk results back to parent papers, keeping the best score."""
+    seen: dict[str, SearchResult] = {}
+    for r in results:
+        parent_key = r.doc_id.split("_chunk_")[0] if "_chunk_" in r.doc_id else r.doc_id
+        if parent_key not in seen or r.score > seen[parent_key].score:
+            seen[parent_key] = SearchResult(
+                doc_id=parent_key, score=r.score, title=r.title, source=r.source,
+            )
+    return sorted(seen.values(), key=lambda x: x.score, reverse=True)
+
+
 class Searcher:
     def __init__(self, embedder: Embedder, vector_store: VectorStore, bm25_index: BM25Index) -> None:
         self._embedder = embedder
@@ -68,11 +80,13 @@ class Searcher:
     ) -> list[SearchResult]:
         embedding = self._embedder.embed(query)
         where = build_where_filter(collection, tags)
-        results = self._vector_store.search(embedding, limit=limit, where=where)
-        return [
+        # Fetch extra results to account for chunk deduplication
+        results = self._vector_store.search(embedding, limit=limit * 3, where=where)
+        raw = [
             SearchResult(doc_id=r["id"], score=r["score"], title=r.get("metadata", {}).get("title", ""), source="vector")
             for r in results
         ]
+        return _deduplicate_chunks(raw)[:limit]
 
     def hybrid_search(
         self, query: str, limit: int = 10,
@@ -80,6 +94,6 @@ class Searcher:
     ) -> list[SearchResult]:
         embedding = self._embedder.embed(query)
         where = build_where_filter(collection, tags)
-        vector_results = self._vector_store.search(embedding, limit=limit * 2, where=where)
+        vector_results = self._vector_store.search(embedding, limit=limit * 3, where=where)
         bm25_results = self._bm25.search(query, limit=limit * 2)
         return rrf_fuse([vector_results, bm25_results], limit=limit)
