@@ -21,6 +21,8 @@ class RakConfig:
     model_name: str = DEFAULT_MODEL
     zot_command: str = "zot"
     zotero_storage_dir: Path | None = field(default_factory=detect_zotero_storage)
+    llm_base_url: str = "http://localhost:11434/v1"
+    llm_model: str = "llama3"
 
     @property
     def chroma_dir(self) -> Path:
