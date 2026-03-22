@@ -46,3 +46,11 @@ def test_search_returns_score(bm25):
     results = bm25.search("transformer", limit=1)
     assert "score" in results[0]
     assert results[0]["score"] > 0
+
+
+def test_delete(bm25):
+    bm25.add("A1", "paper about RNA")
+    bm25.add("A2", "paper about DNA")
+    assert bm25.count() == 2
+    bm25.delete("A1")
+    assert bm25.count() == 1

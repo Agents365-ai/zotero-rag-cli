@@ -63,3 +63,17 @@ def test_has(store):
         metadatas=[{"title": "doc"}],
     )
     assert store.has("Z1")
+
+
+def test_delete(store):
+    store.add(
+        ids=["A1", "A2"],
+        embeddings=[[1.0] + [0.0] * 383, [0.0] + [1.0] + [0.0] * 382],
+        documents=["paper one", "paper two"],
+        metadatas=[{"title": "one"}, {"title": "two"}],
+    )
+    assert store.count() == 2
+    store.delete(["A1"])
+    assert store.count() == 1
+    assert not store.has("A1")
+    assert store.has("A2")

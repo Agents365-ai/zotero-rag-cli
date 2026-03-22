@@ -22,6 +22,10 @@ class BM25Index:
         )
         self._conn.commit()
 
+    def delete(self, doc_id: str) -> None:
+        self._conn.execute("DELETE FROM papers_fts WHERE doc_id = ?", (doc_id,))
+        self._conn.commit()
+
     def search(self, query: str, limit: int = 10) -> list[dict]:
         safe_query = " ".join(f'"{token}"' for token in query.split() if token.strip())
         if not safe_query:
