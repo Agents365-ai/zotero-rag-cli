@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from rak.pdf import chunk_text, extract_pdf_text, find_pdf
+from rak.pdf import chunk_text, extract_pdf_text, extract_file_text, find_attachments
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -16,26 +16,45 @@ def test_extract_pdf_text_missing_file():
     assert text == ""
 
 
-def test_find_pdf_found(tmp_path: Path):
+def test_find_attachments_pdf_and_md(tmp_path: Path):
     key_dir = tmp_path / "ABC12345"
     key_dir.mkdir()
     pdf_file = key_dir / "Smith 2024 - Paper.pdf"
     pdf_file.touch()
-    result = find_pdf(tmp_path, "ABC12345")
-    assert result == pdf_file
+    md_file = key_dir / "notes.md"
+    md_file.write_text("some notes")
+    result = find_attachments(tmp_path, "ABC12345")
+    assert len(result) == 2
+    assert pdf_file in result
+    assert md_file in result
 
 
-def test_find_pdf_not_found(tmp_path: Path):
-    result = find_pdf(tmp_path, "NONEXIST")
-    assert result is None
+def test_find_attachments_not_found(tmp_path: Path):
+    result = find_attachments(tmp_path, "NONEXIST")
+    assert result == []
 
 
-def test_find_pdf_no_pdf_in_dir(tmp_path: Path):
+def test_find_attachments_ignores_other_files(tmp_path: Path):
     key_dir = tmp_path / "ABC12345"
     key_dir.mkdir()
     (key_dir / "snapshot.html").touch()
-    result = find_pdf(tmp_path, "ABC12345")
-    assert result is None
+    (key_dir / "image.png").touch()
+    result = find_attachments(tmp_path, "ABC12345")
+    assert result == []
+
+
+def test_extract_file_text_md(tmp_path: Path):
+    md = tmp_path / "note.md"
+    md.write_text("# Title\nSome content here.")
+    text = extract_file_text(md)
+    assert "# Title" in text
+    assert "Some content here." in text
+
+
+def test_extract_file_text_unsupported(tmp_path: Path):
+    txt = tmp_path / "readme.txt"
+    txt.write_text("hello")
+    assert extract_file_text(txt) == ""
 
 
 def test_chunk_text_empty():

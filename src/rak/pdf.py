@@ -20,12 +20,27 @@ def extract_pdf_text(pdf_path: Path) -> str:
         return ""
 
 
-def find_pdf(storage_dir: Path, item_key: str) -> Path | None:
+def extract_file_text(file_path: Path) -> str:
+    """Extract text from a PDF or Markdown file."""
+    suffix = file_path.suffix.lower()
+    if suffix == ".pdf":
+        return extract_pdf_text(file_path)
+    if suffix == ".md":
+        try:
+            return file_path.read_text(encoding="utf-8").strip()
+        except Exception as exc:
+            logger.warning("Failed to read %s: %s", file_path, exc)
+            return ""
+    return ""
+
+
+def find_attachments(storage_dir: Path, item_key: str) -> list[Path]:
+    """Find all PDF and Markdown files in a Zotero item's storage directory."""
     key_dir = storage_dir / item_key
     if not key_dir.is_dir():
-        return None
-    pdfs = list(key_dir.glob("*.pdf"))
-    return pdfs[0] if pdfs else None
+        return []
+    files = list(key_dir.glob("*.pdf")) + list(key_dir.glob("*.md"))
+    return sorted(files)
 
 
 def chunk_text(

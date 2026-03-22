@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 from rak.bm25 import BM25Index
 from rak.embedder import Embedder
 from rak.errors import EmptyLibraryError, ZotNotFoundError
-from rak.pdf import chunk_text, extract_pdf_text, find_pdf
+from rak.pdf import chunk_text, extract_file_text, find_attachments
 from rak.registry import compute_hash
 from rak.store import VectorStore
 
@@ -59,12 +59,12 @@ def diff_items(
         if not key:
             continue
         fetched_keys.add(key)
-        pdf_text = ""
+        attachment_text = ""
         if storage_dir:
-            pdf_path = find_pdf(storage_dir, key)
-            if pdf_path:
-                pdf_text = extract_pdf_text(pdf_path)
-        text = build_document_text(item, pdf_text=pdf_text)
+            attachments = find_attachments(storage_dir, key)
+            if attachments:
+                attachment_text = "\n\n".join(t for p in attachments if (t := extract_file_text(p)))
+        text = build_document_text(item, pdf_text=attachment_text)
         if not text.strip():
             continue
         text_cache[key] = text
@@ -172,12 +172,12 @@ def _index_full(
         key = item.get("key", "")
         if not key:
             continue
-        pdf_text = ""
+        attachment_text = ""
         if storage_dir:
-            pdf_path = find_pdf(storage_dir, key)
-            if pdf_path:
-                pdf_text = extract_pdf_text(pdf_path)
-        text = build_document_text(item, pdf_text=pdf_text)
+            attachments = find_attachments(storage_dir, key)
+            if attachments:
+                attachment_text = "\n\n".join(t for p in attachments if (t := extract_file_text(p)))
+        text = build_document_text(item, attachment_text)
         if not text.strip():
             continue
         text_cache[key] = text
