@@ -6,15 +6,15 @@ Semantic and hybrid search over your Zotero library, powered by local embeddings
 
 ### Three Working Modes
 
-| Mode | Command | Use Case | LLM Required? |
-|------|---------|----------|:---:|
-| **Search** | `rak search` / `rak export` | Semantic/hybrid retrieval, export results | No |
-| **Ask** | `rak ask` | Single-turn Q&A, for scripts and AI assistants | Yes |
-| **Chat** | `rak chat` | Multi-turn interactive conversation | Yes |
+| Mode | Command | For Whom | Use Case | LLM Required? |
+|------|---------|----------|----------|:---:|
+| **Search** | `rak search` / `rak export` | AI assistants / scripts | Retrieve paper data, `--json` output for programs | No |
+| **Ask** | `rak ask` | Humans | Quick one-off question, get answer and go | Yes |
+| **Chat** | `rak chat` | Humans | Deep multi-turn discussion over papers | Yes |
 
-- **Search mode**: Pure local vector/keyword retrieval, fully offline, no API key needed
-- **Ask mode**: Search + LLM answer in a single call. Designed for programmatic use (Claude Code, pipelines, scripts), supports `--json` output
-- **Chat mode**: Search + LLM multi-turn conversation with context history. Designed for human interaction, supports `/search` to switch topics, `/tokens` to track usage
+- **Search mode**: Pure local vector/keyword retrieval, fully offline, no API key needed. Claude Code uses `rak --json search` to get structured paper data
+- **Ask mode**: Search + LLM answer in one shot. For quick questions in the terminal — use it like a search engine, get your answer and move on
+- **Chat mode**: Search + LLM multi-turn conversation with context history. For sitting down and exploring papers in depth, with follow-up questions, `/search` to switch topics, `/tokens` to track usage
 
 ## Install
 
