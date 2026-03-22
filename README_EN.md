@@ -379,6 +379,10 @@ graph LR
 - [x] Add `doc_id` uniqueness guard in BM25 index to prevent duplicate insertions inflating scores
 - [x] Rename `get_by_metadata` → `get_ids_by_metadata` to clarify API semantics
 - [x] Add `--verbose` global flag to enable debug-level logging for troubleshooting
+- [ ] `rak search --bm25` pure keyword search mode without loading embedding model
+- [ ] Rich progress bar for indexing (replace `Indexed 50/3038...`)
+- [ ] `rak similar KEY` to find papers similar to a given one
+- [ ] Smart chunking: split by paragraphs/sections instead of fixed 512-word windows
 
 ## Related Projects
 
