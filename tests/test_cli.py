@@ -179,3 +179,15 @@ def test_search_help_shows_filter_flags():
     result = runner.invoke(main, ["search", "--help"])
     assert "--collection" in result.output
     assert "--tag" in result.output
+
+
+def test_ask_help():
+    runner = CliRunner()
+    result = runner.invoke(main, ["ask", "--help"])
+    assert result.exit_code == 0
+    assert "--context" in result.output
+    assert "--hybrid" in result.output
+    assert "--llm-model" in result.output
+    assert "--llm-url" in result.output
+    assert "--collection" in result.output
+    assert "--tag" in result.output

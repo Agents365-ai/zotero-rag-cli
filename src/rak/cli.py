@@ -203,3 +203,76 @@ def search(ctx: click.Context, query: str, hybrid: bool, limit: int, collection:
         click.echo(f"Error: {exc}", err=True)
         click.echo("Check your internet connection and try again.", err=True)
         ctx.exit(1)
+
+
+@main.command()
+@click.argument("question")
+@click.option("--context", "context_n", default=5, help="Number of documents to retrieve")
+@click.option("--hybrid", is_flag=True, help="Use hybrid search (vector + BM25)")
+@click.option("--collection", default=None, help="Filter by Zotero collection name")
+@click.option("--tag", "tags", multiple=True, help="Filter by tag (repeatable, OR logic)")
+@click.option("--llm-model", default=None, help="Override LLM model name")
+@click.option("--llm-url", default=None, help="Override LLM server URL")
+@click.pass_context
+def ask(
+    ctx: click.Context,
+    question: str,
+    context_n: int,
+    hybrid: bool,
+    collection: str | None,
+    tags: tuple[str, ...],
+    llm_model: str | None,
+    llm_url: str | None,
+) -> None:
+    """Ask a question and get an answer based on your papers."""
+    from rak.bm25 import BM25Index
+    from rak.embedder import Embedder
+    from rak.formatter import format_ask_result
+    from rak.llm import LLMClient, LLMConnectionError
+    from rak.searcher import Searcher
+    from rak.store import VectorStore
+
+    config: RakConfig = ctx.obj["config"]
+    json_out = ctx.obj["json"]
+
+    try:
+        embedder = Embedder(config.model_name)
+        vector_store = VectorStore(config.chroma_dir, embedder.dimension)
+        bm25 = BM25Index(config.fts_db_path)
+        searcher = Searcher(embedder, vector_store, bm25)
+
+        tag_list = list(tags) if tags else None
+        if hybrid:
+            results = searcher.hybrid_search(question, limit=context_n, collection=collection, tags=tag_list)
+        else:
+            results = searcher.vector_search(question, limit=context_n, collection=collection, tags=tag_list)
+
+        if not results:
+            click.echo("No relevant papers found for your question.")
+            return
+
+        context = []
+        for r in results:
+            doc_data = vector_store._collection.get(ids=[r.doc_id], include=["documents"])
+            doc_text = doc_data["documents"][0] if doc_data["documents"] else ""
+            context.append({
+                "key": r.doc_id,
+                "title": r.title,
+                "text": doc_text,
+                "score": r.score,
+            })
+
+        bm25.close()
+
+        base_url = llm_url or config.llm_base_url
+        model = llm_model or config.llm_model
+        llm = LLMClient(base_url=base_url, model=model)
+        answer = llm.ask(question, context)
+
+        click.echo(format_ask_result(answer, context, output_json=json_out))
+    except ModelDownloadError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        ctx.exit(1)
+    except LLMConnectionError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        ctx.exit(1)
