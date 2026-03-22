@@ -394,3 +394,105 @@ def export(
     except ModelDownloadError as exc:
         click.echo(f"Error: {exc}", err=True)
         ctx.exit(1)
+
+
+@main.command()
+@click.option("--context", "context_n", default=5, help="Number of documents to retrieve")
+@click.option("--hybrid", is_flag=True, help="Use hybrid search (vector + BM25)")
+@click.option("--collection", default=None, help="Filter by Zotero collection name")
+@click.option("--tag", "tags", multiple=True, help="Filter by tag (repeatable, OR logic)")
+@click.option("--llm-model", default=None, help="Override LLM model name")
+@click.option("--llm-url", default=None, help="Override LLM server URL")
+@click.pass_context
+def chat(
+    ctx: click.Context,
+    context_n: int,
+    hybrid: bool,
+    collection: str | None,
+    tags: tuple[str, ...],
+    llm_model: str | None,
+    llm_url: str | None,
+) -> None:
+    """Interactive multi-turn Q&A over your papers."""
+    import sys
+    from rak.bm25 import BM25Index
+    from rak.chat import ChatSession
+    from rak.embedder import Embedder
+    from rak.llm import LLMClient, LLMConnectionError
+    from rak.searcher import Searcher
+    from rak.store import VectorStore
+
+    config: RakConfig = ctx.obj["config"]
+
+    try:
+        embedder = Embedder(config.model_name)
+        vector_store = VectorStore(config.chroma_dir, embedder.dimension)
+        bm25 = BM25Index(config.fts_db_path)
+        searcher = Searcher(embedder, vector_store, bm25)
+
+        base_url = llm_url or config.llm_base_url
+        model = llm_model or config.llm_model
+        llm = LLMClient(base_url=base_url, model=model)
+
+        tag_list = list(tags) if tags else None
+        session = ChatSession(
+            searcher=searcher, llm=llm, limit=context_n,
+            collection=collection, tags=tag_list, hybrid=hybrid,
+        )
+
+        click.echo("Enter a search query to find papers (or /quit to exit):")
+        try:
+            query = input("> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            click.echo()
+            return
+        if not query or query == "/quit":
+            return
+
+        session.search(query, vector_store=vector_store)
+        if not session.context:
+            click.echo("No papers found. Try a different query.")
+            return
+
+        click.echo(f"\nFound {len(session.context)} papers:")
+        for i, doc in enumerate(session.context, 1):
+            click.echo(f"  {i}. {doc['key']} - {doc['title']} (score: {doc['score']:.3f})")
+        click.echo(f"\nChat started. Commands: /search <query>, /context, /quit\n")
+
+        while True:
+            try:
+                user_input = input("> ").strip()
+            except (EOFError, KeyboardInterrupt):
+                click.echo()
+                break
+
+            if not user_input:
+                continue
+            if user_input == "/quit":
+                break
+            if user_input == "/context":
+                for i, doc in enumerate(session.context, 1):
+                    click.echo(f"  {i}. {doc['key']} - {doc['title']} (score: {doc['score']:.3f})")
+                continue
+            if user_input.startswith("/search "):
+                new_query = user_input[8:].strip()
+                if new_query:
+                    session.search(new_query, vector_store=vector_store)
+                    click.echo(f"\nFound {len(session.context)} papers:")
+                    for i, doc in enumerate(session.context, 1):
+                        click.echo(f"  {i}. {doc['key']} - {doc['title']} (score: {doc['score']:.3f})")
+                    click.echo()
+                continue
+
+            for token in session.ask(user_input):
+                sys.stdout.write(token)
+                sys.stdout.flush()
+            sys.stdout.write("\n\n")
+
+        bm25.close()
+    except ModelDownloadError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        ctx.exit(1)
+    except LLMConnectionError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        ctx.exit(1)

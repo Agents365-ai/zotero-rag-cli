@@ -63,3 +63,16 @@ class LLMClient:
                     yield chunk.choices[0].delta.content
         except APIConnectionError:
             raise LLMConnectionError(self._base_url)
+
+    def stream_messages(self, messages: list[dict]) -> Iterator[str]:
+        try:
+            stream = self._client.chat.completions.create(
+                model=self._model,
+                messages=messages,
+                stream=True,
+            )
+            for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+        except APIConnectionError:
+            raise LLMConnectionError(self._base_url)

@@ -209,3 +209,13 @@ def test_export_help():
     assert "--hybrid" in result.output
     assert "--collection" in result.output
     assert "--tag" in result.output
+
+
+def test_chat_help():
+    runner = CliRunner()
+    result = runner.invoke(main, ["chat", "--help"])
+    assert result.exit_code == 0
+    assert "Interactive multi-turn" in result.output
+    assert "--context" in result.output
+    assert "--hybrid" in result.output
+    assert "--llm-model" in result.output
