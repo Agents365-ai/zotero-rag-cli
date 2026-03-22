@@ -16,11 +16,17 @@ class Embedder:
             self._dimension: int | None = None
         else:
             try:
-                import logging
+                import io, logging, os, sys
                 for name in ("sentence_transformers", "transformers", "safetensors"):
                     logging.getLogger(name).setLevel(logging.WARNING)
-                from sentence_transformers import SentenceTransformer
-                self._model = SentenceTransformer(model_name, trust_remote_code=True)
+                os.environ["SAFETENSORS_FAST_GPU"] = "1"
+                stderr_backup = sys.stderr
+                sys.stderr = io.StringIO()
+                try:
+                    from sentence_transformers import SentenceTransformer
+                    self._model = SentenceTransformer(model_name, trust_remote_code=True)
+                finally:
+                    sys.stderr = stderr_backup
             except Exception as exc:
                 from rak.errors import ModelDownloadError
                 raise ModelDownloadError(model_name, str(exc)) from exc
