@@ -27,7 +27,7 @@ def test_chat_session_search_populates_context():
     session = ChatSession(searcher=searcher, llm=llm)
 
     mock_store = MagicMock()
-    mock_store.get.return_value = {"documents": ["Full text of paper one."]}
+    mock_store.get.return_value = {"ids": ["A1"], "documents": ["Full text of paper one."]}
     session.search("test query", vector_store=mock_store)
 
     assert len(session.context) == 1
@@ -47,7 +47,7 @@ def test_chat_session_ask_appends_history():
     session = ChatSession(searcher=searcher, llm=llm)
 
     mock_store = MagicMock()
-    mock_store.get.return_value = {"documents": ["Text."]}
+    mock_store.get.return_value = {"ids": ["A1"], "documents": ["Text."]}
     session.search("query", vector_store=mock_store)
 
     tokens = list(session.ask("What is this about?"))
@@ -69,7 +69,7 @@ def test_chat_session_search_resets_history():
     session = ChatSession(searcher=searcher, llm=llm)
 
     mock_store = MagicMock()
-    mock_store.get.return_value = {"documents": ["Text."]}
+    mock_store.get.return_value = {"ids": ["A1"], "documents": ["Text."]}
 
     session.search("first query", vector_store=mock_store)
     list(session.ask("question"))  # adds user + assistant messages
@@ -96,7 +96,7 @@ def test_token_count_property():
     llm = _mock_llm(["Reply."])
     session = ChatSession(searcher=searcher, llm=llm)
     mock_store = MagicMock()
-    mock_store.get.return_value = {"documents": ["Text."]}
+    mock_store.get.return_value = {"ids": ["A1"], "documents": ["Text."]}
     session.search("query", vector_store=mock_store)
     initial_tokens = session.token_count
     assert initial_tokens > 0
@@ -110,7 +110,7 @@ def test_turn_count_property():
     llm = _mock_llm(["R."])
     session = ChatSession(searcher=searcher, llm=llm)
     mock_store = MagicMock()
-    mock_store.get.return_value = {"documents": ["T."]}
+    mock_store.get.return_value = {"ids": ["A1"], "documents": ["T."]}
     session.search("q", vector_store=mock_store)
     assert session.turn_count == 0
     list(session.ask("q1"))

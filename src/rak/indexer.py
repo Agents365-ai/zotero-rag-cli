@@ -44,9 +44,15 @@ def build_document_text(item: dict, pdf_text: str = "") -> str:
 def diff_items(
     items: list[dict], registry: dict[str, str],
     storage_dir: Path | None = None,
-) -> tuple[list[dict], list[dict], list[str]]:
+) -> tuple[list[dict], list[dict], list[str], dict[str, str]]:
+    """Compare items against registry to find changes.
+
+    Returns (to_add, to_update, to_remove, text_cache) where text_cache
+    maps item keys to their built document text, avoiding redundant PDF extraction.
+    """
     to_add = []
     to_update = []
+    text_cache: dict[str, str] = {}
     fetched_keys = set()
     for item in items:
         key = item.get("key", "")
@@ -61,13 +67,14 @@ def diff_items(
         text = build_document_text(item, pdf_text=pdf_text)
         if not text.strip():
             continue
+        text_cache[key] = text
         content_hash = compute_hash(text)
         if key not in registry:
             to_add.append(item)
         elif registry[key] != content_hash:
             to_update.append(item)
     to_remove = [k for k in registry if k not in fetched_keys]
-    return to_add, to_update, to_remove
+    return to_add, to_update, to_remove, text_cache
 
 
 def fetch_zot_items(zot_command: str = "zot", limit: int = 5000) -> list[dict]:
@@ -95,7 +102,7 @@ def index_items(
     storage_dir: Path | None = None,
     chunk_size: int = 512,
     chunk_overlap: int = 64,
-) -> dict[str, int] | int:
+) -> dict | tuple[int, dict[str, str]]:
     if registry is not None:
         return _index_incremental(items, embedder, vector_store, bm25_index, on_progress, registry, storage_dir, chunk_size, chunk_overlap)
     return _index_full(items, embedder, vector_store, bm25_index, on_progress, storage_dir, chunk_size, chunk_overlap)
@@ -152,8 +159,10 @@ def _index_full(
     storage_dir: Path | None = None,
     chunk_size: int = 512,
     chunk_overlap: int = 64,
-) -> int:
+) -> tuple[int, dict[str, str]]:
+    """Index all items. Returns (count, text_cache) where text_cache maps keys to document text."""
     count = 0
+    text_cache: dict[str, str] = {}
     batch_ids: list[str] = []
     batch_texts: list[str] = []
     batch_metadatas: list[dict] = []
@@ -171,6 +180,7 @@ def _index_full(
         text = build_document_text(item, pdf_text=pdf_text)
         if not text.strip():
             continue
+        text_cache[key] = text
         metadata = _build_metadata(item)
         # Store full document for BM25
         bm25_index.add(key, text)
@@ -197,7 +207,7 @@ def _index_full(
 
     # Flush remaining
     _embed_and_store_batch(batch_ids, batch_texts, batch_metadatas, embedder, vector_store)
-    return count
+    return count, text_cache
 
 
 def _index_incremental(
@@ -211,7 +221,7 @@ def _index_incremental(
     chunk_size: int = 512,
     chunk_overlap: int = 64,
 ) -> dict[str, int]:
-    to_add, to_update, to_remove = diff_items(items, registry, storage_dir=storage_dir)
+    to_add, to_update, to_remove, text_cache = diff_items(items, registry, storage_dir=storage_dir)
     new_registry = dict(registry)
     added = 0
     updated = 0
@@ -224,12 +234,7 @@ def _index_incremental(
 
     for i, (item, action) in enumerate(work_items):
         key = item["key"]
-        pdf_text = ""
-        if storage_dir:
-            pdf_path = find_pdf(storage_dir, key)
-            if pdf_path:
-                pdf_text = extract_pdf_text(pdf_path)
-        text = build_document_text(item, pdf_text=pdf_text)
+        text = text_cache.get(key, "")
         if not text.strip():
             continue
         metadata = _build_metadata(item)

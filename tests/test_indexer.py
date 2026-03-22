@@ -58,7 +58,7 @@ def _make_item(key, title, abstract=""):
 
 def test_diff_items_all_new():
     items = [_make_item("A1", "Paper One"), _make_item("A2", "Paper Two")]
-    to_add, to_update, to_remove = diff_items(items, {})
+    to_add, to_update, to_remove, _text_cache = diff_items(items, {})
     assert len(to_add) == 2
     assert len(to_update) == 0
     assert len(to_remove) == 0
@@ -68,7 +68,7 @@ def test_diff_items_unchanged():
     items = [_make_item("A1", "Paper One")]
     text = build_document_text(items[0])
     registry = {"A1": compute_hash(text)}
-    to_add, to_update, to_remove = diff_items(items, registry)
+    to_add, to_update, to_remove, _text_cache = diff_items(items, registry)
     assert len(to_add) == 0
     assert len(to_update) == 0
     assert len(to_remove) == 0
@@ -77,7 +77,7 @@ def test_diff_items_unchanged():
 def test_diff_items_updated():
     items = [_make_item("A1", "Paper One Updated")]
     registry = {"A1": "old_hash_value"}
-    to_add, to_update, to_remove = diff_items(items, registry)
+    to_add, to_update, to_remove, _text_cache = diff_items(items, registry)
     assert len(to_add) == 0
     assert len(to_update) == 1
     assert to_update[0]["key"] == "A1"
@@ -88,7 +88,7 @@ def test_diff_items_removed():
     items = [_make_item("A1", "Paper One")]
     text = build_document_text(items[0])
     registry = {"A1": compute_hash(text), "B1": "some_hash"}
-    to_add, to_update, to_remove = diff_items(items, registry)
+    to_add, to_update, to_remove, _text_cache = diff_items(items, registry)
     assert len(to_add) == 0
     assert len(to_update) == 0
     assert to_remove == ["B1"]

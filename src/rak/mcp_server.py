@@ -1,6 +1,7 @@
 """MCP server for rak — exposes search and status tools for LM Studio, Cursor, etc."""
 from __future__ import annotations
 
+import atexit
 import json
 
 from mcp.server.fastmcp import FastMCP
@@ -10,6 +11,18 @@ from rak.config import RakConfig
 mcp = FastMCP("rak")
 
 _cached_searcher: tuple | None = None
+
+
+def _cleanup() -> None:
+    """Close cached BM25 SQLite connection on shutdown."""
+    global _cached_searcher
+    if _cached_searcher is not None:
+        _, _, bm25 = _cached_searcher
+        bm25.close()
+        _cached_searcher = None
+
+
+atexit.register(_cleanup)
 
 
 def _get_config() -> RakConfig:

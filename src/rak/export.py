@@ -28,6 +28,13 @@ def _bibtex_entry_type(item_type: str) -> str:
     return ZOTERO_TO_BIBTEX.get(item_type, "article")
 
 
+def _escape_bibtex(value: str) -> str:
+    """Escape special BibTeX characters in field values."""
+    for char in ('\\', '{', '}', '&', '%', '#', '_', '~', '^'):
+        value = value.replace(char, f'\\{char}')
+    return value
+
+
 def _extract_year(date: str) -> str:
     if not date:
         return ""
@@ -39,10 +46,12 @@ def to_bibtex(results: list[dict]) -> str:
     for r in results:
         entry_type = _bibtex_entry_type(r.get("item_type", ""))
         year = _extract_year(r.get("date", ""))
+        title = _escape_bibtex(r['title'])
+        authors = _escape_bibtex(r.get('authors', ''))
         entry = (
             f"@{entry_type}{{{r['key']},\n"
-            f"  title = {{{r['title']}}},\n"
-            f"  author = {{{r.get('authors', '')}}},\n"
+            f"  title = {{{title}}},\n"
+            f"  author = {{{authors}}},\n"
             f"  year = {{{year}}},\n"
             f"}}"
         )

@@ -40,6 +40,20 @@ def load_config(data_dir: Path) -> dict:
     return json.loads(path.read_text())
 
 
+def _validate_chunk_params(cfg: dict, key: str, value: int) -> None:
+    """Validate that chunk_overlap < chunk_size after applying the new value."""
+    chunk_size = cfg.get("chunk_size", 512)
+    chunk_overlap = cfg.get("chunk_overlap", 64)
+    if key == "chunk_size":
+        chunk_size = value
+    elif key == "chunk_overlap":
+        chunk_overlap = value
+    if chunk_overlap >= chunk_size:
+        raise ValueError(f"chunk_overlap ({chunk_overlap}) must be less than chunk_size ({chunk_size})")
+    if chunk_size < 1:
+        raise ValueError(f"chunk_size must be positive, got {chunk_size}")
+
+
 def save_config(data_dir: Path, key: str, value: str) -> None:
     import json
     if key == "zot_command":
@@ -47,6 +61,8 @@ def save_config(data_dir: Path, key: str, value: str) -> None:
     coerced = _coerce_config_value(key, value)
     data_dir.mkdir(parents=True, exist_ok=True)
     cfg = load_config(data_dir)
+    if key in ("chunk_size", "chunk_overlap"):
+        _validate_chunk_params(cfg, key, coerced)
     cfg[key] = coerced
     (data_dir / CONFIG_FILENAME).write_text(json.dumps(cfg, indent=2))
 

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def extract_pdf_text(pdf_path: Path) -> str:
@@ -12,7 +15,8 @@ def extract_pdf_text(pdf_path: Path) -> str:
         text = "\n".join(page.get_text() for page in doc)
         doc.close()
         return text.strip()
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to extract text from %s: %s", pdf_path, exc)
         return ""
 
 
@@ -34,6 +38,8 @@ def chunk_text(
     Returns a list of chunk strings. If the text fits in one chunk,
     returns a single-element list.
     """
+    if overlap >= chunk_size:
+        raise ValueError(f"chunk_overlap ({overlap}) must be less than chunk_size ({chunk_size})")
     words = text.split()
     if not words:
         return []

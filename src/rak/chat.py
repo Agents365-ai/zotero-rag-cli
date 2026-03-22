@@ -49,16 +49,18 @@ class ChatSession:
             results = self._searcher.vector_search(
                 query, limit=self._limit, collection=self._collection, tags=self._tags)
 
+        doc_texts: dict[str, str] = {}
+        if vector_store and results:
+            doc_ids = [r.doc_id for r in results]
+            doc_data = vector_store.get(ids=doc_ids, include=["documents"])
+            doc_texts = {doc_id: doc for doc_id, doc in zip(doc_data["ids"], doc_data["documents"])}
+
         self.context = []
         for r in results:
-            doc_text = ""
-            if vector_store:
-                doc_data = vector_store.get(ids=[r.doc_id], include=["documents"])
-                doc_text = doc_data["documents"][0] if doc_data["documents"] else ""
             self.context.append({
                 "key": r.doc_id,
                 "title": r.title,
-                "text": doc_text,
+                "text": doc_texts.get(r.doc_id, ""),
                 "score": r.score,
             })
 

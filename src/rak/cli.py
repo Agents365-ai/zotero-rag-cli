@@ -49,7 +49,6 @@ def index(ctx: click.Context, limit: int, full: bool) -> None:
         click.echo(f"Found {len(items)} items.")
 
         vector_store = VectorStore(config.chroma_dir, embedder.dimension)
-        bm25 = BM25Index(config.fts_db_path)
 
         storage_dir = config.zotero_storage_dir
         if storage_dir:
@@ -64,33 +63,19 @@ def index(ctx: click.Context, limit: int, full: bool) -> None:
         if registry is not None and not registry:
             registry = None
 
-        if registry is None:
-            if full:
-                vector_store.clear()
-                bm25.clear()
-            count = index_items(items, embedder, vector_store, bm25, on_progress, storage_dir=storage_dir, chunk_size=config.chunk_size, chunk_overlap=config.chunk_overlap)
-            new_registry = {}
-            for item in items:
-                key = item.get("key", "")
-                if not key:
-                    continue
-                pdf_text = ""
-                if storage_dir:
-                    from rak.pdf import find_pdf, extract_pdf_text
-                    pdf_path = find_pdf(storage_dir, key)
-                    if pdf_path:
-                        pdf_text = extract_pdf_text(pdf_path)
-                text = build_document_text(item, pdf_text=pdf_text)
-                if text.strip():
-                    new_registry[key] = compute_hash(text)
-            save_registry(config.data_dir, new_registry)
-            bm25.close()
-            click.echo(format_index_stats(count, output_json=json_out))
-        else:
-            result = index_items(items, embedder, vector_store, bm25, on_progress, registry=registry, storage_dir=storage_dir, chunk_size=config.chunk_size, chunk_overlap=config.chunk_overlap)
-            save_registry(config.data_dir, result["registry"])
-            bm25.close()
-            click.echo(format_incremental_stats(result, output_json=json_out))
+        with BM25Index(config.fts_db_path) as bm25:
+            if registry is None:
+                if full:
+                    vector_store.clear()
+                    bm25.clear()
+                count, text_cache = index_items(items, embedder, vector_store, bm25, on_progress, storage_dir=storage_dir, chunk_size=config.chunk_size, chunk_overlap=config.chunk_overlap)
+                new_registry = {k: compute_hash(v) for k, v in text_cache.items()}
+                save_registry(config.data_dir, new_registry)
+                click.echo(format_index_stats(count, output_json=json_out))
+            else:
+                result = index_items(items, embedder, vector_store, bm25, on_progress, registry=registry, storage_dir=storage_dir, chunk_size=config.chunk_size, chunk_overlap=config.chunk_overlap)
+                save_registry(config.data_dir, result["registry"])
+                click.echo(format_incremental_stats(result, output_json=json_out))
 
         save_metadata(config.data_dir, config.model_name, vector_store.count())
     except EmptyLibraryError as exc:
@@ -219,16 +204,15 @@ def search(ctx: click.Context, query: str, hybrid: bool, limit: int, collection:
     try:
         embedder = Embedder(config.model_name)
         vector_store = VectorStore(config.chroma_dir, embedder.dimension)
-        bm25 = BM25Index(config.fts_db_path)
-        searcher = Searcher(embedder, vector_store, bm25)
+        with BM25Index(config.fts_db_path) as bm25:
+            searcher = Searcher(embedder, vector_store, bm25)
 
-        tag_list = list(tags) if tags else None
-        if hybrid:
-            results = searcher.hybrid_search(query, limit=limit, collection=collection, tags=tag_list)
-        else:
-            results = searcher.vector_search(query, limit=limit, collection=collection, tags=tag_list)
+            tag_list = list(tags) if tags else None
+            if hybrid:
+                results = searcher.hybrid_search(query, limit=limit, collection=collection, tags=tag_list)
+            else:
+                results = searcher.vector_search(query, limit=limit, collection=collection, tags=tag_list)
 
-        bm25.close()
         output = format_results(results, output_json=json_out)
         if output.strip():
             click.echo(output)
@@ -273,31 +257,31 @@ def ask(
     try:
         embedder = Embedder(config.model_name)
         vector_store = VectorStore(config.chroma_dir, embedder.dimension)
-        bm25 = BM25Index(config.fts_db_path)
-        searcher = Searcher(embedder, vector_store, bm25)
+        with BM25Index(config.fts_db_path) as bm25:
+            searcher = Searcher(embedder, vector_store, bm25)
 
-        tag_list = list(tags) if tags else None
-        if hybrid:
-            results = searcher.hybrid_search(question, limit=context_n, collection=collection, tags=tag_list)
-        else:
-            results = searcher.vector_search(question, limit=context_n, collection=collection, tags=tag_list)
+            tag_list = list(tags) if tags else None
+            if hybrid:
+                results = searcher.hybrid_search(question, limit=context_n, collection=collection, tags=tag_list)
+            else:
+                results = searcher.vector_search(question, limit=context_n, collection=collection, tags=tag_list)
 
         if not results:
             click.echo("No relevant papers found for your question.")
             return
 
+        doc_ids = [r.doc_id for r in results]
+        doc_data = vector_store.get(ids=doc_ids, include=["documents"])
+        doc_texts = {doc_id: doc for doc_id, doc in zip(doc_data["ids"], doc_data["documents"])}
+
         context = []
         for r in results:
-            doc_data = vector_store.get(ids=[r.doc_id], include=["documents"])
-            doc_text = doc_data["documents"][0] if doc_data["documents"] else ""
             context.append({
                 "key": r.doc_id,
                 "title": r.title,
-                "text": doc_text,
+                "text": doc_texts.get(r.doc_id, ""),
                 "score": r.score,
             })
-
-        bm25.close()
 
         base_url = llm_url or config.llm_base_url
         model = llm_model or config.llm_model
@@ -355,16 +339,14 @@ def export(
     try:
         embedder = Embedder(config.model_name)
         vector_store = VectorStore(config.chroma_dir, embedder.dimension)
-        bm25 = BM25Index(config.fts_db_path)
-        searcher = Searcher(embedder, vector_store, bm25)
+        with BM25Index(config.fts_db_path) as bm25:
+            searcher = Searcher(embedder, vector_store, bm25)
 
-        tag_list = list(tags) if tags else None
-        if hybrid:
-            results = searcher.hybrid_search(query, limit=limit, collection=collection, tags=tag_list)
-        else:
-            results = searcher.vector_search(query, limit=limit, collection=collection, tags=tag_list)
-
-        bm25.close()
+            tag_list = list(tags) if tags else None
+            if hybrid:
+                results = searcher.hybrid_search(query, limit=limit, collection=collection, tags=tag_list)
+            else:
+                results = searcher.vector_search(query, limit=limit, collection=collection, tags=tag_list)
 
         if not results:
             click.echo("No results found.")
@@ -455,77 +437,76 @@ def chat(
     try:
         embedder = Embedder(config.model_name)
         vector_store = VectorStore(config.chroma_dir, embedder.dimension)
-        bm25 = BM25Index(config.fts_db_path)
-        searcher = Searcher(embedder, vector_store, bm25)
+        with BM25Index(config.fts_db_path) as bm25:
+            searcher = Searcher(embedder, vector_store, bm25)
 
-        base_url = llm_url or config.llm_base_url
-        model = llm_model or config.llm_model
-        api_key = config.llm_api_key
-        llm = LLMClient(base_url=base_url, model=model, api_key=api_key)
+            base_url = llm_url or config.llm_base_url
+            model = llm_model or config.llm_model
+            api_key = config.llm_api_key
+            llm = LLMClient(base_url=base_url, model=model, api_key=api_key)
 
-        tag_list = list(tags) if tags else None
-        session = ChatSession(
-            searcher=searcher, llm=llm, limit=context_n,
-            collection=collection, tags=tag_list, hybrid=hybrid,
-        )
+            tag_list = list(tags) if tags else None
+            session = ChatSession(
+                searcher=searcher, llm=llm, limit=context_n,
+                collection=collection, tags=tag_list, hybrid=hybrid,
+            )
 
-        click.echo("Enter a search query to find papers (or /quit to exit):")
-        try:
-            query = input("> ").strip()
-        except (EOFError, KeyboardInterrupt):
-            click.echo()
-            return
-        if not query or query == "/quit":
-            return
-
-        session.search(query, vector_store=vector_store)
-        if not session.context:
-            click.echo("No papers found. Try a different query.")
-            return
-
-        click.echo(f"\nFound {len(session.context)} papers:")
-        for i, doc in enumerate(session.context, 1):
-            click.echo(f"  {i}. {doc['key']} - {doc['title']} (score: {doc['score']:.3f})")
-        from rak.chat import HELP_TEXT
-        click.echo(f"\nChat started. Type /help for commands.\n")
-
-        while True:
+            click.echo("Enter a search query to find papers (or /quit to exit):")
             try:
-                user_input = input("> ").strip()
+                query = input("> ").strip()
             except (EOFError, KeyboardInterrupt):
                 click.echo()
-                break
+                return
+            if not query or query == "/quit":
+                return
 
-            if not user_input:
-                continue
-            if user_input == "/quit":
-                break
-            if user_input == "/help":
-                click.echo(HELP_TEXT)
-                continue
-            if user_input == "/tokens":
-                click.echo(f"Estimated tokens: ~{session.token_count:,} | Turns: {session.turn_count}")
-                continue
-            if user_input == "/context":
-                for i, doc in enumerate(session.context, 1):
-                    click.echo(f"  {i}. {doc['key']} - {doc['title']} (score: {doc['score']:.3f})")
-                continue
-            if user_input.startswith("/search "):
-                new_query = user_input[8:].strip()
-                if new_query:
-                    session.search(new_query, vector_store=vector_store)
-                    click.echo(f"\nFound {len(session.context)} papers:")
+            session.search(query, vector_store=vector_store)
+            if not session.context:
+                click.echo("No papers found. Try a different query.")
+                return
+
+            click.echo(f"\nFound {len(session.context)} papers:")
+            for i, doc in enumerate(session.context, 1):
+                click.echo(f"  {i}. {doc['key']} - {doc['title']} (score: {doc['score']:.3f})")
+            from rak.chat import HELP_TEXT
+            click.echo(f"\nChat started. Type /help for commands.\n")
+
+            while True:
+                try:
+                    user_input = input("> ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    click.echo()
+                    break
+
+                if not user_input:
+                    continue
+                if user_input == "/quit":
+                    break
+                if user_input == "/help":
+                    click.echo(HELP_TEXT)
+                    continue
+                if user_input == "/tokens":
+                    click.echo(f"Estimated tokens: ~{session.token_count:,} | Turns: {session.turn_count}")
+                    continue
+                if user_input == "/context":
                     for i, doc in enumerate(session.context, 1):
                         click.echo(f"  {i}. {doc['key']} - {doc['title']} (score: {doc['score']:.3f})")
-                    click.echo()
-                continue
+                    continue
+                if user_input.startswith("/search "):
+                    new_query = user_input[8:].strip()
+                    if new_query:
+                        session.search(new_query, vector_store=vector_store)
+                        click.echo(f"\nFound {len(session.context)} papers:")
+                        for i, doc in enumerate(session.context, 1):
+                            click.echo(f"  {i}. {doc['key']} - {doc['title']} (score: {doc['score']:.3f})")
+                        click.echo()
+                    continue
 
-            for token in session.ask(user_input):
-                sys.stdout.write(token)
-                sys.stdout.flush()
-            sys.stdout.write("\n\n")
+                for token in session.ask(user_input):
+                    sys.stdout.write(token)
+                    sys.stdout.flush()
+                sys.stdout.write("\n\n")
 
-        bm25.close()
     except ModelDownloadError as exc:
         click.echo(f"Error: {exc}", err=True)
         ctx.exit(1)

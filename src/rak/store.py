@@ -23,9 +23,12 @@ class VectorStore:
         self._collection.delete(ids=ids)
 
     def search(self, query_embedding: list[float], limit: int = 10, where: dict | None = None) -> list[dict]:
+        total = self._collection.count()
+        if total == 0:
+            return []
         kwargs = {
             "query_embeddings": [query_embedding],
-            "n_results": limit,
+            "n_results": min(limit, total),
             "include": ["documents", "metadatas", "distances"],
         }
         if where is not None:
