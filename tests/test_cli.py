@@ -172,3 +172,10 @@ def test_index_help_shows_full_flag():
     runner = CliRunner()
     result = runner.invoke(main, ["index", "--help"])
     assert "--full" in result.output
+
+
+def test_search_help_shows_filter_flags():
+    runner = CliRunner()
+    result = runner.invoke(main, ["search", "--help"])
+    assert "--collection" in result.output
+    assert "--tag" in result.output

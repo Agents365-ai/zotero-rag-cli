@@ -155,8 +155,10 @@ def clear(ctx: click.Context, yes: bool) -> None:
 @click.argument("query")
 @click.option("--hybrid", is_flag=True, help="Use hybrid search (vector + BM25)")
 @click.option("--limit", default=10, help="Number of results")
+@click.option("--collection", default=None, help="Filter by Zotero collection name")
+@click.option("--tag", "tags", multiple=True, help="Filter by tag (repeatable, OR logic)")
 @click.pass_context
-def search(ctx: click.Context, query: str, hybrid: bool, limit: int) -> None:
+def search(ctx: click.Context, query: str, hybrid: bool, limit: int, collection: str | None, tags: tuple[str, ...]) -> None:
     """Semantic search over indexed papers."""
     from rak.bm25 import BM25Index
     from rak.embedder import Embedder
@@ -173,10 +175,11 @@ def search(ctx: click.Context, query: str, hybrid: bool, limit: int) -> None:
         bm25 = BM25Index(config.fts_db_path)
         searcher = Searcher(embedder, vector_store, bm25)
 
+        tag_list = list(tags) if tags else None
         if hybrid:
-            results = searcher.hybrid_search(query, limit=limit)
+            results = searcher.hybrid_search(query, limit=limit, collection=collection, tags=tag_list)
         else:
-            results = searcher.vector_search(query, limit=limit)
+            results = searcher.vector_search(query, limit=limit, collection=collection, tags=tag_list)
 
         bm25.close()
         output = format_results(results, output_json=json_out)

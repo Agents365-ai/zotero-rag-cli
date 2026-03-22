@@ -100,13 +100,17 @@ def _index_full(
         if not text.strip():
             continue
         embedding = embedder.embed(text)
+        collections = item.get("collections", [])
+        tags = item.get("tags", [])
         metadata = {
             "title": item.get("title", ""),
             "date": item.get("date", ""),
             "item_type": item.get("item_type", ""),
-            "collections": item.get("collections", []),
-            "tags": item.get("tags", []),
         }
+        if collections:
+            metadata["collections"] = collections
+        if tags:
+            metadata["tags"] = tags
         vector_store.add(ids=[key], embeddings=[embedding], documents=[text], metadatas=[metadata])
         bm25_index.add(key, text)
         count += 1
@@ -135,13 +139,17 @@ def _index_incremental(
         if not text.strip():
             continue
         embedding = embedder.embed(text)
+        collections = item.get("collections", [])
+        tags = item.get("tags", [])
         metadata = {
             "title": item.get("title", ""),
             "date": item.get("date", ""),
             "item_type": item.get("item_type", ""),
-            "collections": item.get("collections", []),
-            "tags": item.get("tags", []),
         }
+        if collections:
+            metadata["collections"] = collections
+        if tags:
+            metadata["tags"] = tags
         vector_store.add(ids=[key], embeddings=[embedding], documents=[text], metadatas=[metadata])
         if action == "update":
             bm25_index.delete(key)
