@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 from openai import OpenAI, APIConnectionError
 
 from rak.errors import RakError
@@ -26,24 +28,38 @@ class LLMClient:
         self._model = model
         self._base_url = base_url
 
-    def ask(self, question: str, context: list[dict]) -> str:
+    def _build_messages(self, question: str, context: list[dict]) -> list[dict]:
         context_parts = []
         for i, doc in enumerate(context, 1):
             context_parts.append(
                 f"[{i}] {doc['key']} - {doc['title']}\n{doc['text']}"
             )
         context_text = "\n\n".join(context_parts) if context_parts else "No papers found."
-
         user_message = f"Papers:\n\n{context_text}\n\nQuestion: {question}"
+        return [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_message},
+        ]
 
+    def ask(self, question: str, context: list[dict]) -> str:
         try:
             response = self._client.chat.completions.create(
                 model=self._model,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_message},
-                ],
+                messages=self._build_messages(question, context),
             )
             return response.choices[0].message.content
+        except APIConnectionError:
+            raise LLMConnectionError(self._base_url)
+
+    def ask_stream(self, question: str, context: list[dict]) -> Iterator[str]:
+        try:
+            stream = self._client.chat.completions.create(
+                model=self._model,
+                messages=self._build_messages(question, context),
+                stream=True,
+            )
+            for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
         except APIConnectionError:
             raise LLMConnectionError(self._base_url)

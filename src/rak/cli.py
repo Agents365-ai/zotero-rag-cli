@@ -300,9 +300,19 @@ def ask(
         base_url = llm_url or config.llm_base_url
         model = llm_model or config.llm_model
         llm = LLMClient(base_url=base_url, model=model)
-        answer = llm.ask(question, context)
 
-        click.echo(format_ask_result(answer, context, output_json=json_out))
+        if json_out:
+            answer = llm.ask(question, context)
+            click.echo(format_ask_result(answer, context, output_json=True))
+        else:
+            import sys
+            for token in llm.ask_stream(question, context):
+                sys.stdout.write(token)
+                sys.stdout.flush()
+            sys.stdout.write("\n\n")
+            click.echo("Sources:")
+            for i, s in enumerate(context, 1):
+                click.echo(f"  {i}. {s['key']} - {s['title']} (score: {s['score']:.3f})")
     except ModelDownloadError as exc:
         click.echo(f"Error: {exc}", err=True)
         ctx.exit(1)

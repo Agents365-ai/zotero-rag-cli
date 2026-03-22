@@ -41,3 +41,24 @@ def test_ask_connection_error():
         client = LLMClient(base_url="http://localhost:11434/v1", model="llama3")
         with pytest.raises(LLMConnectionError, match="not reachable"):
             client.ask("test", [])
+
+
+def test_ask_stream_yields_tokens():
+    with patch("rak.llm.OpenAI") as mock_openai_cls:
+        mock_client = mock_openai_cls.return_value
+        # Simulate streaming chunks
+        chunks = []
+        for text in ["The ", "answer ", "is ", "42."]:
+            chunk = MagicMock()
+            chunk.choices = [MagicMock()]
+            chunk.choices[0].delta.content = text
+            chunks.append(chunk)
+        mock_client.chat.completions.create.return_value = iter(chunks)
+
+        client = LLMClient(base_url="http://localhost:11434/v1", model="llama3")
+        context = [{"key": "A1", "title": "Paper", "text": "Content."}]
+        tokens = list(client.ask_stream("question", context))
+
+        assert tokens == ["The ", "answer ", "is ", "42."]
+        call_args = mock_client.chat.completions.create.call_args
+        assert call_args.kwargs["stream"] is True
