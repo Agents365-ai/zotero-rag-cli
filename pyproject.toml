@@ -4,6 +4,22 @@ version = "0.1.0"
 description = "rak — Semantic search over your Zotero library"
 requires-python = ">=3.10"
 license = "MIT"
+readme = "README.md"
+authors = [
+    { name = "Agents365-ai" },
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Text Processing :: Indexing",
+]
 dependencies = [
     "click>=8.1",
     "sentence-transformers>=3.0",
@@ -13,6 +29,11 @@ dependencies = [
     "PyMuPDF>=1.24",
     "openai>=1.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Agents365-ai/zotero-rag-cli"
+Repository = "https://github.com/Agents365-ai/zotero-rag-cli"
+Issues = "https://github.com/Agents365-ai/zotero-rag-cli/issues"
 
 [project.optional-dependencies]
 dev = [
