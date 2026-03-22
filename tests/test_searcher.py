@@ -42,3 +42,31 @@ def test_search_result_dataclass():
     r = SearchResult(doc_id="A1", score=0.85, title="Test Paper", source="vector")
     assert r.doc_id == "A1"
     assert r.score == 0.85
+
+
+from rak.searcher import build_where_filter
+
+
+def test_build_where_filter_collection_only():
+    f = build_where_filter(collection="My Papers", tags=None)
+    assert f == {"collections": {"$contains": "My Papers"}}
+
+
+def test_build_where_filter_single_tag():
+    f = build_where_filter(collection=None, tags=["RNA"])
+    assert f == {"tags": {"$contains": "RNA"}}
+
+
+def test_build_where_filter_multiple_tags():
+    f = build_where_filter(collection=None, tags=["RNA", "DNA"])
+    assert f == {"$or": [{"tags": {"$contains": "RNA"}}, {"tags": {"$contains": "DNA"}}]}
+
+
+def test_build_where_filter_collection_and_tags():
+    f = build_where_filter(collection="Bio", tags=["RNA"])
+    assert f == {"$and": [{"collections": {"$contains": "Bio"}}, {"tags": {"$contains": "RNA"}}]}
+
+
+def test_build_where_filter_none():
+    f = build_where_filter(collection=None, tags=None)
+    assert f is None
