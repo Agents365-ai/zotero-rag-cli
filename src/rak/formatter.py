@@ -32,3 +32,17 @@ def format_index_stats(count: int, output_json: bool = False) -> str:
     if output_json:
         return json.dumps({"indexed": count})
     return f"Indexed {count} papers."
+
+
+def format_incremental_stats(stats: dict, output_json: bool = False) -> str:
+    if output_json:
+        return json.dumps({k: v for k, v in stats.items() if k != "registry"})
+    parts = []
+    if stats["added"]:
+        parts.append(f"{stats['added']} new")
+    if stats["updated"]:
+        parts.append(f"{stats['updated']} updated")
+    if stats["removed"]:
+        parts.append(f"{stats['removed']} removed")
+    parts.append(f"{stats['unchanged']} unchanged")
+    return ", ".join(parts) + "."
