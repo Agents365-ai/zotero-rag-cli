@@ -77,3 +77,22 @@ def test_delete(store):
     assert store.count() == 1
     assert not store.has("A1")
     assert store.has("A2")
+
+
+def test_search_with_where_filter(store):
+    store.add(
+        ids=["A1", "A2"],
+        embeddings=[[1.0] + [0.0] * 383, [0.9] + [0.1] + [0.0] * 382],
+        documents=["paper about RNA", "paper about DNA"],
+        metadatas=[
+            {"title": "RNA paper", "collections": ["Biology", "Genomics"], "tags": ["RNA", "seq"]},
+            {"title": "DNA paper", "collections": ["Chemistry"], "tags": ["DNA"]},
+        ],
+    )
+    results = store.search(
+        query_embedding=[1.0] + [0.0] * 383,
+        limit=10,
+        where={"collections": {"$contains": "Biology"}},
+    )
+    assert len(results) == 1
+    assert results[0]["id"] == "A1"

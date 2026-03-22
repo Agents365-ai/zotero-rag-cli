@@ -104,6 +104,8 @@ def _index_full(
             "title": item.get("title", ""),
             "date": item.get("date", ""),
             "item_type": item.get("item_type", ""),
+            "collections": item.get("collections", []),
+            "tags": item.get("tags", []),
         }
         vector_store.add(ids=[key], embeddings=[embedding], documents=[text], metadatas=[metadata])
         bm25_index.add(key, text)
@@ -137,6 +139,8 @@ def _index_incremental(
             "title": item.get("title", ""),
             "date": item.get("date", ""),
             "item_type": item.get("item_type", ""),
+            "collections": item.get("collections", []),
+            "tags": item.get("tags", []),
         }
         vector_store.add(ids=[key], embeddings=[embedding], documents=[text], metadatas=[metadata])
         if action == "update":

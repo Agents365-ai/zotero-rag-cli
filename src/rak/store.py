@@ -22,11 +22,15 @@ class VectorStore:
     def delete(self, ids: list[str]) -> None:
         self._collection.delete(ids=ids)
 
-    def search(self, query_embedding: list[float], limit: int = 10) -> list[dict]:
-        results = self._collection.query(
-            query_embeddings=[query_embedding], n_results=limit,
-            include=["documents", "metadatas", "distances"],
-        )
+    def search(self, query_embedding: list[float], limit: int = 10, where: dict | None = None) -> list[dict]:
+        kwargs = {
+            "query_embeddings": [query_embedding],
+            "n_results": limit,
+            "include": ["documents", "metadatas", "distances"],
+        }
+        if where is not None:
+            kwargs["where"] = where
+        results = self._collection.query(**kwargs)
         items = []
         for i in range(len(results["ids"][0])):
             items.append({

@@ -92,3 +92,17 @@ def test_diff_items_removed():
     assert len(to_add) == 0
     assert len(to_update) == 0
     assert to_remove == ["B1"]
+
+
+def test_build_document_text_with_collections():
+    item = {
+        "key": "C1",
+        "title": "Paper",
+        "creators": [],
+        "abstract": None,
+        "tags": ["RNA"],
+        "collections": ["My Collection"],
+    }
+    text = build_document_text(item)
+    assert "Paper" in text
+    assert "RNA" in text
