@@ -270,16 +270,12 @@ def ask(
             click.echo("No relevant papers found for your question.")
             return
 
-        doc_ids = [r.doc_id for r in results]
-        doc_data = vector_store.get(ids=doc_ids, include=["documents"])
-        doc_texts = {doc_id: doc for doc_id, doc in zip(doc_data["ids"], doc_data["documents"])}
-
         context = []
         for r in results:
             context.append({
                 "key": r.doc_id,
                 "title": r.title,
-                "text": doc_texts.get(r.doc_id, ""),
+                "text": r.snippet,
                 "score": r.score,
             })
 
@@ -460,7 +456,7 @@ def chat(
             if not query or query == "/quit":
                 return
 
-            session.search(query, vector_store=vector_store)
+            session.search(query)
             if not session.context:
                 click.echo("No papers found. Try a different query.")
                 return
@@ -495,7 +491,7 @@ def chat(
                 if user_input.startswith("/search "):
                     new_query = user_input[8:].strip()
                     if new_query:
-                        session.search(new_query, vector_store=vector_store)
+                        session.search(new_query)
                         click.echo(f"\nFound {len(session.context)} papers:")
                         for i, doc in enumerate(session.context, 1):
                             click.echo(f"  {i}. {doc['key']} - {doc['title']} (score: {doc['score']:.3f})")

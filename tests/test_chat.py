@@ -19,16 +19,14 @@ def _mock_llm(tokens):
 
 def test_chat_session_search_populates_context():
     results = [
-        SearchResult(doc_id="A1", score=0.9, title="Paper One", source="vector"),
+        SearchResult(doc_id="A1", score=0.9, title="Paper One", source="vector",
+                     snippet="Full text of paper one."),
     ]
     searcher = _mock_searcher(results)
     llm = _mock_llm([])
 
     session = ChatSession(searcher=searcher, llm=llm)
-
-    mock_store = MagicMock()
-    mock_store.get.return_value = {"ids": ["A1"], "documents": ["Full text of paper one."]}
-    session.search("test query", vector_store=mock_store)
+    session.search("test query")
 
     assert len(session.context) == 1
     assert session.context[0]["key"] == "A1"
@@ -39,16 +37,14 @@ def test_chat_session_search_populates_context():
 
 def test_chat_session_ask_appends_history():
     results = [
-        SearchResult(doc_id="A1", score=0.9, title="Paper One", source="vector"),
+        SearchResult(doc_id="A1", score=0.9, title="Paper One", source="vector",
+                     snippet="Text."),
     ]
     searcher = _mock_searcher(results)
     llm = _mock_llm(["The ", "answer."])
 
     session = ChatSession(searcher=searcher, llm=llm)
-
-    mock_store = MagicMock()
-    mock_store.get.return_value = {"ids": ["A1"], "documents": ["Text."]}
-    session.search("query", vector_store=mock_store)
+    session.search("query")
 
     tokens = list(session.ask("What is this about?"))
     assert tokens == ["The ", "answer."]
@@ -61,24 +57,22 @@ def test_chat_session_ask_appends_history():
 
 def test_chat_session_search_resets_history():
     results = [
-        SearchResult(doc_id="A1", score=0.9, title="Paper One", source="vector"),
+        SearchResult(doc_id="A1", score=0.9, title="Paper One", source="vector",
+                     snippet="Text."),
     ]
     searcher = _mock_searcher(results)
     llm = _mock_llm(["Response."])
 
     session = ChatSession(searcher=searcher, llm=llm)
 
-    mock_store = MagicMock()
-    mock_store.get.return_value = {"ids": ["A1"], "documents": ["Text."]}
-
-    session.search("first query", vector_store=mock_store)
+    session.search("first query")
     list(session.ask("question"))  # adds user + assistant messages
 
     assert len(session.messages) == 3
 
     # Re-search should reset
     llm.stream_messages.return_value = iter(["New."])
-    session.search("second query", vector_store=mock_store)
+    session.search("second query")
     assert len(session.messages) == 1  # only system message
     assert session.messages[0]["role"] == "system"
 
@@ -91,13 +85,11 @@ def test_estimate_tokens():
 
 
 def test_token_count_property():
-    results = [SearchResult(doc_id="A1", score=0.9, title="P", source="vector")]
+    results = [SearchResult(doc_id="A1", score=0.9, title="P", source="vector", snippet="Text.")]
     searcher = _mock_searcher(results)
     llm = _mock_llm(["Reply."])
     session = ChatSession(searcher=searcher, llm=llm)
-    mock_store = MagicMock()
-    mock_store.get.return_value = {"ids": ["A1"], "documents": ["Text."]}
-    session.search("query", vector_store=mock_store)
+    session.search("query")
     initial_tokens = session.token_count
     assert initial_tokens > 0
     list(session.ask("question"))
@@ -105,13 +97,11 @@ def test_token_count_property():
 
 
 def test_turn_count_property():
-    results = [SearchResult(doc_id="A1", score=0.9, title="P", source="vector")]
+    results = [SearchResult(doc_id="A1", score=0.9, title="P", source="vector", snippet="T.")]
     searcher = _mock_searcher(results)
     llm = _mock_llm(["R."])
     session = ChatSession(searcher=searcher, llm=llm)
-    mock_store = MagicMock()
-    mock_store.get.return_value = {"ids": ["A1"], "documents": ["T."]}
-    session.search("q", vector_store=mock_store)
+    session.search("q")
     assert session.turn_count == 0
     list(session.ask("q1"))
     assert session.turn_count == 1

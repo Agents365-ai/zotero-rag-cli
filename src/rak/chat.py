@@ -41,7 +41,7 @@ class ChatSession:
     def turn_count(self) -> int:
         return sum(1 for m in self.messages if m["role"] == "user")
 
-    def search(self, query: str, vector_store=None) -> None:
+    def search(self, query: str) -> None:
         if self._hybrid:
             results = self._searcher.hybrid_search(
                 query, limit=self._limit, collection=self._collection, tags=self._tags)
@@ -49,18 +49,12 @@ class ChatSession:
             results = self._searcher.vector_search(
                 query, limit=self._limit, collection=self._collection, tags=self._tags)
 
-        doc_texts: dict[str, str] = {}
-        if vector_store and results:
-            doc_ids = [r.doc_id for r in results]
-            doc_data = vector_store.get(ids=doc_ids, include=["documents"])
-            doc_texts = {doc_id: doc for doc_id, doc in zip(doc_data["ids"], doc_data["documents"])}
-
         self.context = []
         for r in results:
             self.context.append({
                 "key": r.doc_id,
                 "title": r.title,
-                "text": doc_texts.get(r.doc_id, ""),
+                "text": r.snippet,
                 "score": r.score,
             })
 
