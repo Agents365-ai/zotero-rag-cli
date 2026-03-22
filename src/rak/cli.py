@@ -261,7 +261,7 @@ def ask(
     from rak.bm25 import BM25Index
     from rak.embedder import Embedder
     from rak.formatter import format_ask_result
-    from rak.llm import LLMClient, LLMConnectionError
+    from rak.llm import LLMClient, LLMConnectionError, LLMServerError
     from rak.searcher import Searcher
     from rak.store import VectorStore
 
@@ -316,7 +316,7 @@ def ask(
     except ModelDownloadError as exc:
         click.echo(f"Error: {exc}", err=True)
         ctx.exit(1)
-    except LLMConnectionError as exc:
+    except (LLMConnectionError, LLMServerError) as exc:
         click.echo(f"Error: {exc}", err=True)
         ctx.exit(1)
 
@@ -442,7 +442,7 @@ def chat(
     from rak.bm25 import BM25Index
     from rak.chat import ChatSession
     from rak.embedder import Embedder
-    from rak.llm import LLMClient, LLMConnectionError
+    from rak.llm import LLMClient, LLMConnectionError, LLMServerError
     from rak.searcher import Searcher
     from rak.store import VectorStore
 
@@ -524,6 +524,6 @@ def chat(
     except ModelDownloadError as exc:
         click.echo(f"Error: {exc}", err=True)
         ctx.exit(1)
-    except LLMConnectionError as exc:
+    except (LLMConnectionError, LLMServerError) as exc:
         click.echo(f"Error: {exc}", err=True)
         ctx.exit(1)

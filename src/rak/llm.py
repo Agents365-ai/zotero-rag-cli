@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from openai import OpenAI, APIConnectionError
+from openai import OpenAI, APIConnectionError, APIStatusError
 
 from rak.errors import RakError
 
@@ -20,6 +20,15 @@ class LLMConnectionError(RakError):
             f"LLM server not reachable at {base_url}. "
             "Start Ollama or LMStudio first."
         )
+
+
+class LLMServerError(RakError):
+    def __init__(self, base_url: str, model: str, detail: str = "") -> None:
+        msg = f"LLM server error at {base_url} (model: {model})."
+        if detail:
+            msg += f" {detail}"
+        msg += " Check that the model is installed: ollama pull " + model
+        super().__init__(msg)
 
 
 class LLMClient:
@@ -50,6 +59,8 @@ class LLMClient:
             return response.choices[0].message.content
         except APIConnectionError:
             raise LLMConnectionError(self._base_url)
+        except APIStatusError as exc:
+            raise LLMServerError(self._base_url, self._model, str(exc))
 
     def ask_stream(self, question: str, context: list[dict]) -> Iterator[str]:
         try:
@@ -63,6 +74,8 @@ class LLMClient:
                     yield chunk.choices[0].delta.content
         except APIConnectionError:
             raise LLMConnectionError(self._base_url)
+        except APIStatusError as exc:
+            raise LLMServerError(self._base_url, self._model, str(exc))
 
     def stream_messages(self, messages: list[dict]) -> Iterator[str]:
         try:
@@ -76,3 +89,5 @@ class LLMClient:
                     yield chunk.choices[0].delta.content
         except APIConnectionError:
             raise LLMConnectionError(self._base_url)
+        except APIStatusError as exc:
+            raise LLMServerError(self._base_url, self._model, str(exc))
