@@ -32,8 +32,8 @@ class LLMServerError(RakError):
 
 
 class LLMClient:
-    def __init__(self, base_url: str, model: str) -> None:
-        self._client = OpenAI(base_url=base_url, api_key="not-needed")
+    def __init__(self, base_url: str, model: str, api_key: str = "not-needed") -> None:
+        self._client = OpenAI(base_url=base_url, api_key=api_key)
         self._model = model
         self._base_url = base_url
 

@@ -192,6 +192,8 @@ def config_cmd(ctx: click.Context, key: str | None, value: str | None) -> None:
         click.echo(f"zot_command = {config.zot_command}")
         click.echo(f"llm_base_url = {config.llm_base_url}")
         click.echo(f"llm_model = {config.llm_model}")
+        api_display = config.llm_api_key if config.llm_api_key == "not-needed" else config.llm_api_key[:8] + "..."
+        click.echo(f"llm_api_key = {api_display}")
         click.echo(f"data_dir = {config.data_dir}")
         click.echo(f"zotero_storage_dir = {config.zotero_storage_dir}")
 
@@ -299,7 +301,8 @@ def ask(
 
         base_url = llm_url or config.llm_base_url
         model = llm_model or config.llm_model
-        llm = LLMClient(base_url=base_url, model=model)
+        api_key = config.llm_api_key
+        llm = LLMClient(base_url=base_url, model=model, api_key=api_key)
 
         if json_out:
             answer = llm.ask(question, context)
@@ -456,7 +459,8 @@ def chat(
 
         base_url = llm_url or config.llm_base_url
         model = llm_model or config.llm_model
-        llm = LLMClient(base_url=base_url, model=model)
+        api_key = config.llm_api_key
+        llm = LLMClient(base_url=base_url, model=model, api_key=api_key)
 
         tag_list = list(tags) if tags else None
         session = ChatSession(
