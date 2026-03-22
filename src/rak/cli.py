@@ -309,3 +309,78 @@ def ask(
     except LLMConnectionError as exc:
         click.echo(f"Error: {exc}", err=True)
         ctx.exit(1)
+
+
+@main.command()
+@click.argument("query")
+@click.option("--format", "fmt", type=click.Choice(["csv", "bibtex"]), default="csv", help="Export format")
+@click.option("--hybrid", is_flag=True, help="Use hybrid search (vector + BM25)")
+@click.option("--limit", default=10, help="Number of results")
+@click.option("--collection", default=None, help="Filter by Zotero collection name")
+@click.option("--tag", "tags", multiple=True, help="Filter by tag (repeatable, OR logic)")
+@click.option("--output", "output_file", default=None, type=click.Path(), help="Write to file instead of stdout")
+@click.pass_context
+def export(
+    ctx: click.Context,
+    query: str,
+    fmt: str,
+    hybrid: bool,
+    limit: int,
+    collection: str | None,
+    tags: tuple[str, ...],
+    output_file: str | None,
+) -> None:
+    """Export search results as CSV or BibTeX."""
+    from rak.bm25 import BM25Index
+    from rak.embedder import Embedder
+    from rak.export import to_bibtex, to_csv
+    from rak.searcher import Searcher
+    from rak.store import VectorStore
+
+    config: RakConfig = ctx.obj["config"]
+
+    try:
+        embedder = Embedder(config.model_name)
+        vector_store = VectorStore(config.chroma_dir, embedder.dimension)
+        bm25 = BM25Index(config.fts_db_path)
+        searcher = Searcher(embedder, vector_store, bm25)
+
+        tag_list = list(tags) if tags else None
+        if hybrid:
+            results = searcher.hybrid_search(query, limit=limit, collection=collection, tags=tag_list)
+        else:
+            results = searcher.vector_search(query, limit=limit, collection=collection, tags=tag_list)
+
+        bm25.close()
+
+        if not results:
+            click.echo("No results found.")
+            return
+
+        export_rows = []
+        for r in results:
+            doc_data = vector_store._collection.get(ids=[r.doc_id], include=["metadatas"])
+            meta = doc_data["metadatas"][0] if doc_data["metadatas"] else {}
+            export_rows.append({
+                "key": r.doc_id,
+                "title": r.title,
+                "score": r.score,
+                "source": r.source,
+                "date": meta.get("date", ""),
+                "authors": meta.get("authors", ""),
+            })
+
+        if fmt == "bibtex":
+            output = to_bibtex(export_rows)
+        else:
+            output = to_csv(export_rows)
+
+        if output_file:
+            from pathlib import Path
+            Path(output_file).write_text(output)
+            click.echo(f"Exported {len(export_rows)} results to {output_file}")
+        else:
+            click.echo(output)
+    except ModelDownloadError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        ctx.exit(1)

@@ -198,3 +198,14 @@ def test_config_help():
     result = runner.invoke(main, ["config", "--help"])
     assert result.exit_code == 0
     assert "Show or set" in result.output
+
+
+def test_export_help():
+    runner = CliRunner()
+    result = runner.invoke(main, ["export", "--help"])
+    assert result.exit_code == 0
+    assert "--format" in result.output
+    assert "--output" in result.output
+    assert "--hybrid" in result.output
+    assert "--collection" in result.output
+    assert "--tag" in result.output
