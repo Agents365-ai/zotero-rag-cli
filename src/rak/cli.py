@@ -59,6 +59,11 @@ def index(ctx: click.Context, limit: int, full: bool) -> None:
             click.echo(f"PDF extraction enabled: {storage_dir}")
             if config.pdf_provider != "pymupdf":
                 click.echo(f"PDF provider: {config.pdf_provider} (slower but higher quality)")
+            else:
+                import shutil
+                available = [p for p in ("mineru", "docling") if shutil.which(p)]
+                if available:
+                    click.echo(f"Tip: {', '.join(available)} detected. Use `rak config pdf_provider {available[0]}` for better PDF extraction.")
         else:
             click.echo("PDF extraction: Zotero storage not found, indexing metadata only.")
 
