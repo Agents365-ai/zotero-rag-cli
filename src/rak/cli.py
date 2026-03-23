@@ -214,8 +214,10 @@ def config_cmd(ctx: click.Context, key: str | None, value: str | None) -> None:
 @main.command()
 @click.argument("key")
 @click.option("--limit", default=10, help="Number of results")
+@click.option("--collection", default=None, help="Filter by Zotero collection name")
+@click.option("--tag", "tags", multiple=True, help="Filter by tag (repeatable, OR logic)")
 @click.pass_context
-def similar(ctx: click.Context, key: str, limit: int) -> None:
+def similar(ctx: click.Context, key: str, limit: int, collection: str | None, tags: tuple[str, ...]) -> None:
     """Find papers similar to a given one by its Zotero key."""
     from rak.bm25 import BM25Index
     from rak.embedder import Embedder
@@ -231,7 +233,7 @@ def similar(ctx: click.Context, key: str, limit: int) -> None:
         vector_store = VectorStore(config.chroma_dir, embedder.dimension)
         with BM25Index(config.fts_db_path) as bm25:
             searcher = Searcher(embedder, vector_store, bm25)
-            results = searcher.similar_search(key, limit=limit)
+            results = searcher.similar_search(key, limit=limit, collection=collection, tags=list(tags) or None)
 
         if not results:
             click.echo(f"No similar papers found for key '{key}'. Check the key exists in the index.")

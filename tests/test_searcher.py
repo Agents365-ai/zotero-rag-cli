@@ -206,3 +206,25 @@ def test_similar_search_no_vector_store():
     searcher = Searcher(None, None, bm25)
     results = searcher.similar_search("SRC", limit=5)
     assert results == []
+
+
+def test_similar_search_with_filters():
+    """similar_search passes where filter to vector_store.search when collection/tags given."""
+    from unittest.mock import MagicMock, call
+    from rak.searcher import Searcher, build_where_filter
+
+    vector_store = MagicMock()
+    vector_store.get_embedding.return_value = [0.1, 0.2, 0.3]
+    vector_store.search.return_value = [
+        {"id": "A", "score": 0.9, "document": "paper A", "metadata": {"title": "Paper A"}},
+    ]
+    bm25 = MagicMock()
+    searcher = Searcher(MagicMock(), vector_store, bm25)
+
+    results = searcher.similar_search("SRC", limit=5, collection="My Collection", tags=["RNA"])
+
+    expected_where = build_where_filter(collection="My Collection", tags=["RNA"])
+    vector_store.search.assert_called_once_with(
+        [0.1, 0.2, 0.3], limit=18, where=expected_where
+    )
+    assert results[0].doc_id == "A"

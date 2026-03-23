@@ -118,6 +118,7 @@ class Searcher:
 
     def similar_search(
         self, doc_key: str, limit: int = 10,
+        collection: str | None = None, tags: list[str] | None = None,
     ) -> list[SearchResult]:
         """Find papers similar to a given document by its key."""
         if self._vector_store is None:
@@ -128,8 +129,9 @@ class Searcher:
             embedding = self._vector_store.get_embedding(f"{doc_key}_chunk_0")
         if embedding is None:
             return []
+        where = build_where_filter(collection, tags)
         # Fetch extra to account for chunks and self-exclusion
-        results = self._vector_store.search(embedding, limit=(limit + 1) * 3)
+        results = self._vector_store.search(embedding, limit=(limit + 1) * 3, where=where)
         raw = [
             SearchResult(
                 doc_id=r["id"], score=r["score"],
