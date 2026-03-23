@@ -383,7 +383,7 @@ graph LR
 - [x] `rak search --bm25` pure keyword search mode without loading embedding model
 - [x] Rich progress bar for indexing (replace `Indexed 50/3038...`)
 - [x] MinerU / Docling PDF parsing: `rak config pdf_provider mineru` or `docling` for high-quality PDF extraction (preserves tables/formulas/layout), auto-fallback to PyMuPDF on failure
-- [ ] `rak similar KEY` to find papers similar to a given one
+- [x] `rak similar KEY` to find papers similar to a given one
 - [x] Smart chunking: split by paragraphs/sections instead of fixed 512-word windows
 
 ## Related Projects

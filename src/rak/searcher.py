@@ -116,6 +116,33 @@ class Searcher:
         ]
         return _deduplicate_chunks(raw)[:limit]
 
+    def similar_search(
+        self, doc_key: str, limit: int = 10,
+    ) -> list[SearchResult]:
+        """Find papers similar to a given document by its key."""
+        if self._vector_store is None:
+            return []
+        # Try the key directly, then try the first chunk
+        embedding = self._vector_store.get_embedding(doc_key)
+        if embedding is None:
+            embedding = self._vector_store.get_embedding(f"{doc_key}_chunk_0")
+        if embedding is None:
+            return []
+        # Fetch extra to account for chunks and self-exclusion
+        results = self._vector_store.search(embedding, limit=(limit + 1) * 3)
+        raw = [
+            SearchResult(
+                doc_id=r["id"], score=r["score"],
+                title=r.get("metadata", {}).get("title", ""),
+                source="similar",
+                snippet=r.get("document", ""),
+            )
+            for r in results
+        ]
+        deduped = _deduplicate_chunks(raw)
+        # Exclude the source paper
+        return [r for r in deduped if r.doc_id != doc_key][:limit]
+
     def hybrid_search(
         self, query: str, limit: int = 10,
         collection: str | None = None, tags: list[str] | None = None,

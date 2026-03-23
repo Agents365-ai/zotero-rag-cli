@@ -96,3 +96,17 @@ def test_search_with_where_filter(store):
     )
     assert len(results) == 1
     assert results[0]["id"] == "A1"
+
+
+def test_get_embedding(store):
+    emb = [1.0] + [0.0] * 383
+    store.add(ids=["E1"], embeddings=[emb], documents=["doc"], metadatas=[{"title": "t"}])
+    result = store.get_embedding("E1")
+    assert result is not None
+    assert len(result) == 384
+    assert result[0] == pytest.approx(1.0, abs=0.01)
+
+
+def test_get_embedding_missing(store):
+    result = store.get_embedding("NONEXIST")
+    assert result is None

@@ -141,3 +141,68 @@ def test_deduplicate_chunks_no_chunks():
     deduped = _deduplicate_chunks(results)
     assert len(deduped) == 2
     assert deduped[0].doc_id == "A"
+
+
+def test_similar_search_excludes_source():
+    """similar_search returns similar papers excluding the source paper."""
+    from unittest.mock import MagicMock
+    from rak.searcher import Searcher
+
+    vector_store = MagicMock()
+    vector_store.get_embedding.return_value = [0.1, 0.2, 0.3]
+    vector_store.search.return_value = [
+        {"id": "SRC", "score": 1.0, "document": "source paper", "metadata": {"title": "Source"}},
+        {"id": "A", "score": 0.9, "document": "similar paper A", "metadata": {"title": "Paper A"}},
+        {"id": "B", "score": 0.8, "document": "similar paper B", "metadata": {"title": "Paper B"}},
+    ]
+    bm25 = MagicMock()
+    searcher = Searcher(MagicMock(), vector_store, bm25)
+    results = searcher.similar_search("SRC", limit=5)
+    ids = [r.doc_id for r in results]
+    assert "SRC" not in ids
+    assert "A" in ids
+    assert "B" in ids
+    assert results[0].source == "similar"
+
+
+def test_similar_search_uses_chunk_embedding():
+    """similar_search falls back to chunk_0 embedding when key not found."""
+    from unittest.mock import MagicMock
+    from rak.searcher import Searcher
+
+    vector_store = MagicMock()
+    vector_store.get_embedding.side_effect = lambda key: None if key == "SRC" else [0.1, 0.2]
+    vector_store.search.return_value = [
+        {"id": "SRC_chunk_0", "score": 1.0, "document": "chunk", "metadata": {"title": "Source"}},
+        {"id": "A", "score": 0.9, "document": "other", "metadata": {"title": "Paper A"}},
+    ]
+    bm25 = MagicMock()
+    searcher = Searcher(MagicMock(), vector_store, bm25)
+    results = searcher.similar_search("SRC", limit=5)
+    vector_store.get_embedding.assert_any_call("SRC_chunk_0")
+    ids = [r.doc_id for r in results]
+    assert "SRC" not in ids
+
+
+def test_similar_search_key_not_found():
+    """similar_search returns empty list when key doesn't exist."""
+    from unittest.mock import MagicMock
+    from rak.searcher import Searcher
+
+    vector_store = MagicMock()
+    vector_store.get_embedding.return_value = None
+    bm25 = MagicMock()
+    searcher = Searcher(MagicMock(), vector_store, bm25)
+    results = searcher.similar_search("NONEXIST", limit=5)
+    assert results == []
+
+
+def test_similar_search_no_vector_store():
+    """similar_search returns empty when no vector store (BM25-only mode)."""
+    from unittest.mock import MagicMock
+    from rak.searcher import Searcher
+
+    bm25 = MagicMock()
+    searcher = Searcher(None, None, bm25)
+    results = searcher.similar_search("SRC", limit=5)
+    assert results == []

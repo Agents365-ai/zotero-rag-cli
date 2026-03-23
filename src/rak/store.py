@@ -55,6 +55,13 @@ class VectorStore:
         """Query document IDs by metadata filter."""
         return self._collection.get(where=where, include=[])
 
+    def get_embedding(self, doc_id: str) -> list[float] | None:
+        """Retrieve the embedding vector for a document ID."""
+        result = self._collection.get(ids=[doc_id], include=["embeddings"])
+        if not result["ids"]:
+            return None
+        return result["embeddings"][0]
+
     def has(self, doc_id: str) -> bool:
         result = self._collection.get(ids=[doc_id], include=[])
         return len(result["ids"]) > 0

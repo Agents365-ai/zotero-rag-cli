@@ -212,6 +212,40 @@ def config_cmd(ctx: click.Context, key: str | None, value: str | None) -> None:
 
 
 @main.command()
+@click.argument("key")
+@click.option("--limit", default=10, help="Number of results")
+@click.pass_context
+def similar(ctx: click.Context, key: str, limit: int) -> None:
+    """Find papers similar to a given one by its Zotero key."""
+    from rak.bm25 import BM25Index
+    from rak.embedder import Embedder
+    from rak.formatter import format_results
+    from rak.searcher import Searcher
+    from rak.store import VectorStore
+
+    config: RakConfig = ctx.obj["config"]
+    json_out = ctx.obj["json"]
+
+    try:
+        embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
+        vector_store = VectorStore(config.chroma_dir, embedder.dimension)
+        with BM25Index(config.fts_db_path) as bm25:
+            searcher = Searcher(embedder, vector_store, bm25)
+            results = searcher.similar_search(key, limit=limit)
+
+        if not results:
+            click.echo(f"No similar papers found for key '{key}'. Check the key exists in the index.")
+            return
+
+        output = format_results(results, output_json=json_out)
+        if output.strip():
+            click.echo(output)
+    except ModelDownloadError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        ctx.exit(1)
+
+
+@main.command()
 @click.argument("query")
 @click.option("--hybrid", is_flag=True, help="Use hybrid search (vector + BM25)")
 @click.option("--bm25", "bm25_only", is_flag=True, help="Pure keyword search (no embedding model needed)")
