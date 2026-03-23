@@ -343,6 +343,11 @@ pip install zotero-rag-cli[mcp]
 | 工具 | 功能 |
 |------|------|
 | `search_papers` | 语义/混合搜索，返回论文元数据 + 匹配片段 |
+| `search_papers_bm25` | 纯关键词搜索，无需加载嵌入模型 |
+| `similar_papers` | 根据 Zotero key 查找相似论文 |
+| `ask_papers` | 基于论文上下文的 LLM 问答 |
+| `export_papers` | 导出搜索结果为 CSV 或 BibTeX |
+| `show_config` | 查看当前配置 |
 | `index_status` | 查看索引状态 |
 
 ## 搭配 zot 使用
@@ -426,7 +431,7 @@ graph LR
 - [ ] 提升测试覆盖率：CLI 模块当前约 51%，加固后再开发新功能
 - [ ] 异步 PDF 提取：并行化索引中最慢的环节
 - [ ] GitHub Actions CI：自动化测试 + tag 触发 PyPI 发布
-- [ ] README 更新：文档化 MCP 工具及 v0.6.1 改进
+- [x] README 更新：文档化 MCP 工具及 v0.6.1 改进
 
 ## 相关项目
 
