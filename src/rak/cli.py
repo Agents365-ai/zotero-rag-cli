@@ -253,6 +253,83 @@ def similar(ctx: click.Context, key: str, limit: int, collection: str | None, ta
 
 
 @main.command()
+@click.option("--limit", default=5000, help="Max items to index from zot")
+@click.pass_context
+def reindex(ctx: click.Context, limit: int) -> None:
+    """Clear indexes and rebuild from scratch. Useful after changing pdf_provider."""
+    import shutil
+    from rak.bm25 import BM25Index
+    from rak.embedder import Embedder
+    from rak.formatter import format_index_stats
+    from rak.indexer import fetch_zot_items, index_items
+    from rak.metadata import META_FILENAME, save_metadata
+    from rak.registry import REGISTRY_FILENAME, compute_hash, save_registry
+    from rak.store import VectorStore
+
+    config: RakConfig = ctx.obj["config"]
+    json_out = ctx.obj["json"]
+    config.data_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        # Clear existing indexes
+        for target in [config.chroma_dir, config.fts_db_path, config.data_dir / META_FILENAME, config.data_dir / REGISTRY_FILENAME]:
+            if target.is_dir():
+                shutil.rmtree(target)
+            elif target.exists():
+                target.unlink()
+        click.echo("Cleared existing indexes.")
+
+        click.echo("Loading embedding model...")
+        embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
+
+        click.echo("Fetching items from zot...")
+        items = fetch_zot_items(config.zot_command, limit=limit)
+        click.echo(f"Found {len(items)} items.")
+
+        vector_store = VectorStore(config.chroma_dir, embedder.dimension)
+
+        storage_dir = config.zotero_storage_dir
+        if storage_dir:
+            click.echo(f"PDF extraction enabled: {storage_dir}")
+            if config.pdf_provider != "pymupdf":
+                click.echo(f"PDF provider: {config.pdf_provider} (slower but higher quality)")
+        else:
+            click.echo("PDF extraction: Zotero storage not found, indexing metadata only.")
+
+        from rich.progress import Progress, BarColumn, TextColumn, MofNCompleteColumn, TimeRemainingColumn
+
+        with BM25Index(config.fts_db_path) as bm25, \
+             Progress(
+                 TextColumn("[bold blue]{task.description}"),
+                 BarColumn(),
+                 MofNCompleteColumn(),
+                 TimeRemainingColumn(),
+             ) as progress:
+            task_desc = f"Reindexing ({config.pdf_provider})" if config.pdf_provider != "pymupdf" else "Reindexing"
+            task = progress.add_task(task_desc, total=len(items))
+
+            def on_progress(current: int, total: int) -> None:
+                progress.update(task, completed=current)
+
+            count, text_cache = index_items(items, embedder, vector_store, bm25, on_progress, storage_dir=storage_dir, chunk_size=config.chunk_size, chunk_overlap=config.chunk_overlap, pdf_provider=config.pdf_provider)
+            new_registry = {k: compute_hash(v) for k, v in text_cache.items()}
+            save_registry(config.data_dir, new_registry)
+            click.echo(format_index_stats(count, output_json=json_out))
+
+        save_metadata(config.data_dir, config.model_name, vector_store.count())
+    except EmptyLibraryError as exc:
+        click.echo(str(exc))
+        ctx.exit(0)
+    except ZotNotFoundError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        ctx.exit(1)
+    except ModelDownloadError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        click.echo("Check your internet connection and try again.", err=True)
+        ctx.exit(1)
+
+
+@main.command()
 @click.argument("query")
 @click.option("--hybrid", is_flag=True, help="Use hybrid search (vector + BM25)")
 @click.option("--bm25", "bm25_only", is_flag=True, help="Pure keyword search (no embedding model needed)")

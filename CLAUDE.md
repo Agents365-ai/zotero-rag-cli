@@ -27,6 +27,7 @@ rak index                          # Incremental index (auto PDF/MD extraction)
 rak index --full                   # Full rebuild
 rak status                         # Show index stats
 rak clear --yes                    # Reset all indexes
+rak reindex                            # Clear and rebuild (useful after changing pdf_provider)
 rak config                         # Show settings
 rak config llm_model mistral       # Set config value
 rak search "query" --hybrid        # Hybrid search (vector + BM25)
@@ -54,7 +55,7 @@ zot CLI → indexer (fetch + parse + PDF/MD extract) → embedder → vector sto
 
 **Key modules and their roles:**
 
-- **cli.py** — Click entry point (`rak`). Commands: `index`, `search`, `similar`, `ask`, `chat`, `export`, `config`, `status`, `clear`, `completion`. Global flags: `--json`, `--model`, `--verbose`.
+- **cli.py** — Click entry point (`rak`). Commands: `index`, `reindex`, `search`, `similar`, `ask`, `chat`, `export`, `config`, `status`, `clear`, `completion`. Global flags: `--json`, `--model`, `--verbose`.
 - **config.py** — `RakConfig` dataclass. Data stored in `~/Zotero/rak/`, auto-detect Zotero storage, LLM and embedding settings. Persistent config via `config.json`.
 - **embedder.py** — Supports two providers: `local` (SentenceTransformer) and `api` (OpenAI-compatible `/v1/embeddings`). `embed()` for single, `embed_batch()` for bulk. Suppresses noisy model loading output.
 - **store.py** — `VectorStore` wrapping ChromaDB persistent client. Collection `rak_papers`, cosine distance. `search()` clamps `n_results` to collection size. `get_ids_by_metadata()` returns IDs only.
