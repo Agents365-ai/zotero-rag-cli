@@ -423,6 +423,10 @@ graph LR
 - [ ] `rak notes KEY`: AI-generated paper summary notes, cached locally for quick review
 - [ ] `rak cluster`: Auto-cluster papers by embedding similarity, discover research themes
 - [ ] Web UI: Streamlit visual search dashboard (low priority)
+- [ ] Improve test coverage: CLI module at ~51%, harden before adding new features
+- [ ] Async PDF extraction: parallelize the slowest part of indexing
+- [ ] GitHub Actions CI: automate tests + PyPI publishing on tag
+- [ ] README update: document MCP tools and v0.6.1 improvements
 
 ## Related Projects
 

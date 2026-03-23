@@ -423,6 +423,10 @@ graph LR
 - [ ] `rak notes KEY`：AI 生成论文摘要笔记，本地缓存，快速回顾论文要点
 - [ ] `rak cluster`：基于嵌入向量相似度自动聚类论文，发现研究主题
 - [ ] Web UI：Streamlit 可视化搜索面板（低优先级）
+- [ ] 提升测试覆盖率：CLI 模块当前约 51%，加固后再开发新功能
+- [ ] 异步 PDF 提取：并行化索引中最慢的环节
+- [ ] GitHub Actions CI：自动化测试 + tag 触发 PyPI 发布
+- [ ] README 更新：文档化 MCP 工具及 v0.6.1 改进
 
 ## 相关项目
 
