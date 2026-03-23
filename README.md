@@ -166,6 +166,7 @@ rak clear --yes && rak index
 | `BAAI/bge-small-zh-v1.5` | 512 | 95MB | 中文论文优化 |
 | `BAAI/bge-m3` | 1024 | 2.2GB | 多语言，最强但较慢 |
 | `intfloat/multilingual-e5-small` | 384 | 470MB | 多语言轻量 |
+| `jinaai/jina-embeddings-v3` | 1024 | 2.3GB | 多语言，长文本支持（8192 tokens） |
 
 ### 搜索
 

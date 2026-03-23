@@ -166,6 +166,7 @@ Recommended models:
 | `BAAI/bge-small-zh-v1.5` | 512 | 95MB | Chinese papers |
 | `BAAI/bge-m3` | 1024 | 2.2GB | Multilingual, strongest |
 | `intfloat/multilingual-e5-small` | 384 | 470MB | Multilingual, lightweight |
+| `jinaai/jina-embeddings-v3` | 1024 | 2.3GB | Multilingual, long context (8192 tokens) |
 
 ### Search
 
