@@ -61,7 +61,7 @@ zot CLI → indexer (fetch + parse + PDF/MD extract) → embedder → vector sto
 - **indexer.py** — Orchestrates: `fetch_zot_items()` shells out to `zot --json --limit list`, `build_document_text()` concatenates title/authors/abstract/tags/attachment_text, `diff_items()` computes add/update/remove sets with text cache to avoid redundant extraction, `index_items()` supports both full and incremental modes via registry. Long documents are chunked into overlapping segments stored as separate vectors.
 - **searcher.py** — `Searcher` with dependency-injected embedder/store/bm25 (embedder and store are optional for BM25-only mode). `build_where_filter()` builds ChromaDB metadata filters. `bm25_search()` does pure keyword search without loading embeddings. `hybrid_search()` fuses vector + BM25 via `rrf_fuse(k=60)`. Chunk results are deduplicated to parent papers via `_deduplicate_chunks()`. Results include `snippet` from the best-matched chunk.
 - **formatter.py** — Rich tables, JSON output (with optional snippets), incremental stats, and ask result formatting.
-- **pdf.py** — `extract_pdf_text()` via PyMuPDF, `extract_file_text()` handles PDF and Markdown. `find_attachments()` locates all PDF/MD files per Zotero item. `chunk_text()` splits text preferring paragraph/section boundaries (double newlines, markdown headings), merging small paragraphs up to `chunk_size` words and falling back to word-level overlap for oversized paragraphs. Validates `overlap < chunk_size`.
+- **pdf.py** — `extract_pdf_text()` supports two providers: `pymupdf` (default, PyMuPDF) and `mineru` (MinerU CLI for structured Markdown output with table/formula preservation). Falls back to PyMuPDF on MinerU failure. `extract_file_text()` handles PDF and Markdown, passing `provider` through. `find_attachments()` locates all PDF/MD files per Zotero item. `chunk_text()` splits text preferring paragraph/section boundaries (double newlines, markdown headings), merging small paragraphs up to `chunk_size` words and falling back to word-level overlap for oversized paragraphs. Validates `overlap < chunk_size`.
 - **llm.py** — `LLMClient` wrapping OpenAI SDK for chat completions. Compatible with Ollama, LM Studio, OpenAI, DeepSeek, and any OpenAI-compatible endpoint.
 - **export.py** — `to_csv()` and `to_bibtex()` formatters with BibTeX special character escaping and proper Zotero-to-BibTeX type mapping.
 - **metadata.py** — `IndexMetadata` dataclass, `save_metadata()`/`load_metadata()` for tracking index state.
@@ -80,9 +80,10 @@ zot CLI → indexer (fetch + parse + PDF/MD extract) → embedder → vector sto
 - `ask`/`chat` use search result snippets as LLM context instead of re-fetching documents.
 - BibTeX export escapes special characters (`\ { } & % # _ ~ ^`).
 - Config validates `chunk_overlap < chunk_size` at save time.
+- MinerU integration uses the `mineru` CLI directly, keeping heavy dependencies out of `rak`'s install. Falls back to PyMuPDF silently with a warning on failure.
 
 **Configurable keys:**
-`model_name`, `zot_command`, `llm_base_url`, `llm_model`, `llm_api_key`, `chunk_size`, `chunk_overlap`, `embedding_provider` (`local`/`api`), `embedding_base_url`, `embedding_api_key`.
+`model_name`, `zot_command`, `llm_base_url`, `llm_model`, `llm_api_key`, `chunk_size`, `chunk_overlap`, `embedding_provider` (`local`/`api`), `embedding_base_url`, `embedding_api_key`, `pdf_provider` (`pymupdf`/`mineru`).
 
 ## Build System
 
