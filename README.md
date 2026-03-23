@@ -426,13 +426,19 @@ graph LR
 - [x] MinerU / Docling PDF 解析支持：`rak config pdf_provider mineru` 或 `docling` 启用高质量 PDF 提取（表格/公式/排版保留），失败自动回退 PyMuPDF
 - [x] `rak similar KEY` 查找与指定论文相似的论文
 - [x] 智能分块：按段落/章节切分替代固定 512 词窗口
-- [ ] `rak cluster`：基于嵌入向量相似度自动聚类论文，发现研究主题
-- [ ] Web UI：Streamlit 可视化搜索面板（低优先级）
 - [ ] 提升测试覆盖率：CLI 模块当前约 51%，加固后再开发新功能
 - [ ] 异步 PDF 提取：并行化索引中最慢的环节
 - [x] GitHub Actions CI：自动化测试 + tag 触发 PyPI 发布
 - [x] README 更新：文档化 MCP 工具及 v0.6.1 改进
-- [ ] 文档站搭建：MkDocs Material + GitHub Pages（待 `notes` 和 `cluster` 完成后再搭建）
+
+### 高级功能（未来考虑）
+
+> 超出核心语义搜索范围，待搜索基础稳固后评估。
+
+- [ ] `rak notes`：AI 生成论文摘要 — 从 ChromaDB 提取分块发送至 LLM，生成结构化总结（研究问题/方法/结论），缓存为 `~/Zotero/rak/notes/KEY.md`
+- [ ] `rak cluster`：基于嵌入向量相似度自动聚类论文（HDBSCAN）— 发现研究主题、识别空白、组织文献综述，TF-IDF 主题标签 + 可选 LLM 命名
+- [ ] Web UI：Streamlit 可视化搜索面板
+- [ ] 文档站搭建：MkDocs Material + GitHub Pages
 
 ## 相关项目
 

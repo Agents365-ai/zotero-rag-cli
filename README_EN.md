@@ -426,13 +426,19 @@ graph LR
 - [x] MinerU / Docling PDF parsing: `rak config pdf_provider mineru` or `docling` for high-quality PDF extraction (preserves tables/formulas/layout), auto-fallback to PyMuPDF on failure
 - [x] `rak similar KEY` to find papers similar to a given one
 - [x] Smart chunking: split by paragraphs/sections instead of fixed 512-word windows
-- [ ] `rak cluster`: Auto-cluster papers by embedding similarity, discover research themes
-- [ ] Web UI: Streamlit visual search dashboard (low priority)
 - [ ] Improve test coverage: CLI module at ~51%, harden before adding new features
 - [ ] Async PDF extraction: parallelize the slowest part of indexing
 - [x] GitHub Actions CI: automate tests + PyPI publishing on tag
 - [x] README update: document MCP tools and v0.6.1 improvements
-- [ ] Documentation site: MkDocs Material + GitHub Pages (after `notes` and `cluster` are done)
+
+### Advanced Features (Future Consideration)
+
+> Beyond the core semantic search scope. Will evaluate when the search foundation is solid.
+
+- [ ] `rak notes`: AI-generated paper summaries via configured LLM — retrieve chunks from ChromaDB, send to LLM for structured summary (research question/methods/conclusions), cache as `~/Zotero/rak/notes/KEY.md`
+- [ ] `rak cluster`: Auto-cluster papers by embedding similarity (HDBSCAN) — discover research themes, find gaps, organize literature reviews, with TF-IDF topic labels and optional LLM naming
+- [ ] Web UI: Streamlit visual search dashboard
+- [ ] Documentation site: MkDocs Material + GitHub Pages
 
 ## Related Projects
 
