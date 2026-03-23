@@ -426,8 +426,8 @@ graph LR
 - [x] MinerU / Docling PDF 解析支持：`rak config pdf_provider mineru` 或 `docling` 启用高质量 PDF 提取（表格/公式/排版保留），失败自动回退 PyMuPDF
 - [x] `rak similar KEY` 查找与指定论文相似的论文
 - [x] 智能分块：按段落/章节切分替代固定 512 词窗口
-- [ ] 提升测试覆盖率：CLI 模块当前约 51%，加固后再开发新功能
-- [ ] 异步 PDF 提取：并行化索引中最慢的环节
+- [x] 提升测试覆盖率：整体 67% → 79%，CLI 50% → 69%，新增 72 个测试
+- [x] 异步 PDF 提取：ThreadPoolExecutor 并行化索引中最慢的环节
 - [x] GitHub Actions CI：自动化测试 + tag 触发 PyPI 发布
 - [x] README 更新：文档化 MCP 工具及 v0.6.1 改进
 

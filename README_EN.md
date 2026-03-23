@@ -426,8 +426,8 @@ graph LR
 - [x] MinerU / Docling PDF parsing: `rak config pdf_provider mineru` or `docling` for high-quality PDF extraction (preserves tables/formulas/layout), auto-fallback to PyMuPDF on failure
 - [x] `rak similar KEY` to find papers similar to a given one
 - [x] Smart chunking: split by paragraphs/sections instead of fixed 512-word windows
-- [ ] Improve test coverage: CLI module at ~51%, harden before adding new features
-- [ ] Async PDF extraction: parallelize the slowest part of indexing
+- [x] Improve test coverage: 67% → 79% overall, CLI 50% → 69%, +72 tests
+- [x] Async PDF extraction: ThreadPoolExecutor parallelizes the slowest part of indexing
 - [x] GitHub Actions CI: automate tests + PyPI publishing on tag
 - [x] README update: document MCP tools and v0.6.1 improvements
 
