@@ -23,7 +23,7 @@ class VectorStore:
         """Check that stored embeddings match the expected dimension."""
         if self._collection.count() == 0:
             return
-        sample = self._collection.peek(limit=1, include=["embeddings"])
+        sample = self._collection.get(limit=1, include=["embeddings"])
         if sample["embeddings"]:
             stored_dim = len(sample["embeddings"][0])
             if stored_dim != self._dimension:
