@@ -108,7 +108,10 @@ rak search "spatial transcriptomics" --hybrid
 # 4. 终端问答（需要 LLM）
 rak ask "单细胞聚类的主要方法有哪些？"
 
-# 5. 多轮对话（需要 LLM）
+# 5. 查找相似论文
+rak similar ABC12345
+
+# 6. 多轮对话（需要 LLM）
 rak chat
 ```
 
@@ -341,7 +344,7 @@ graph LR
 |------|----------|------|
 | `--json` | 全局 | JSON 输出（含 snippet） |
 | `--hybrid` | search, ask, chat, export | 混合搜索 |
-| `--limit N` | search, export | 结果数量 |
+| `--limit N` | search, similar, export | 结果数量 |
 | `--collection` | search, ask, chat, export | 按 collection 过滤 |
 | `--tag` | search, ask, chat, export | 按标签过滤（可重复，OR 逻辑） |
 | `--full` | index | 全量重建 |

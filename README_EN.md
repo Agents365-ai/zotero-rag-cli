@@ -108,7 +108,10 @@ rak search "spatial transcriptomics" --hybrid
 # 4. Terminal Q&A (requires LLM)
 rak ask "What are the main single-cell clustering methods?"
 
-# 5. Multi-turn chat (requires LLM)
+# 5. Find similar papers
+rak similar ABC12345
+
+# 6. Multi-turn chat (requires LLM)
 rak chat
 ```
 
@@ -341,7 +344,7 @@ graph LR
 |--------|----------|-------------|
 | `--json` | Global | JSON output (with snippets) |
 | `--hybrid` | search, ask, chat, export | Hybrid search |
-| `--limit N` | search, export | Number of results |
+| `--limit N` | search, similar, export | Number of results |
 | `--collection` | search, ask, chat, export | Filter by collection |
 | `--tag` | search, ask, chat, export | Filter by tag (repeatable, OR) |
 | `--full` | index | Full rebuild |
