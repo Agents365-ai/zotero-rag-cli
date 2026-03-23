@@ -207,3 +207,115 @@ def test_show_config(tmp_path):
     assert data["model_name"] == "all-MiniLM-L6-v2"
     assert data["pdf_provider"] == "pymupdf"
     assert data["chunk_size"] == 512
+
+
+def test_cache_invalidation_on_missing_db():
+    """If FTS db is deleted, cached searcher should be invalidated."""
+    import rak.mcp_server as mcp_mod
+
+    mock_searcher_old = MagicMock()
+    mock_vs_old = MagicMock()
+    mock_bm25_old = MagicMock()
+    # Simulate probe failing (db gone)
+    mock_bm25_old.search.side_effect = Exception("db gone")
+
+    mock_searcher_new = MagicMock()
+    mock_vs_new = MagicMock()
+    mock_bm25_new = MagicMock()
+
+    old_cached = mcp_mod._cached_searcher
+    try:
+        mcp_mod._cached_searcher = (mock_searcher_old, mock_vs_old, mock_bm25_old)
+
+        fake_config = MagicMock()
+        fake_config.fts_db_path.exists.return_value = False  # db missing
+
+        with patch("rak.bm25.BM25Index", return_value=mock_bm25_new), \
+             patch("rak.embedder.Embedder", return_value=MagicMock(dimension=384)), \
+             patch("rak.store.VectorStore", return_value=mock_vs_new), \
+             patch("rak.searcher.Searcher", return_value=mock_searcher_new):
+            result_tuple = mcp_mod._init_searcher(fake_config)
+
+        # Old bm25 should have been closed
+        mock_bm25_old.close.assert_called_once()
+        # Cache should have been rebuilt — new searcher returned
+        searcher, vs, bm25 = result_tuple
+        assert searcher is mock_searcher_new
+    finally:
+        mcp_mod._cached_searcher = old_cached
+
+
+def test_cleanup_function():
+    """Test _cleanup closes BM25 and clears cache."""
+    import rak.mcp_server as mcp_mod
+    from rak.mcp_server import _cleanup
+
+    mock_bm25 = MagicMock()
+    old_cached = mcp_mod._cached_searcher
+    try:
+        mcp_mod._cached_searcher = (MagicMock(), MagicMock(), mock_bm25)
+        _cleanup()
+        mock_bm25.close.assert_called_once()
+        assert mcp_mod._cached_searcher is None
+    finally:
+        mcp_mod._cached_searcher = old_cached
+
+
+def test_cleanup_when_no_cache():
+    """_cleanup should be safe to call when nothing is cached."""
+    import rak.mcp_server as mcp_mod
+    from rak.mcp_server import _cleanup
+
+    old_cached = mcp_mod._cached_searcher
+    try:
+        mcp_mod._cached_searcher = None
+        _cleanup()  # should not raise
+        assert mcp_mod._cached_searcher is None
+    finally:
+        mcp_mod._cached_searcher = old_cached
+
+
+def test_export_papers_no_results():
+    mock_searcher = MagicMock()
+    mock_searcher.vector_search.return_value = []
+    mock_bm25 = MagicMock()
+
+    with patch("rak.mcp_server._get_config"), \
+         patch("rak.mcp_server._init_searcher", return_value=(mock_searcher, None, mock_bm25)):
+        result = export_papers("nonexistent")
+
+    assert "No results found" in result
+
+
+def test_similar_papers_not_found():
+    import json
+
+    mock_searcher = MagicMock()
+    mock_bm25 = MagicMock()
+
+    with patch("rak.mcp_server._get_config"), \
+         patch("rak.mcp_server._init_searcher", return_value=(mock_searcher, None, mock_bm25)), \
+         patch("rak.mcp_server._resolve_key_mcp", return_value=(None, None)):
+        result = similar_papers("nonexistent")
+
+    data = json.loads(result)
+    assert data["status"] == "not_found"
+
+
+def test_search_papers_hybrid():
+    import json
+    from rak.searcher import SearchResult
+
+    mock_searcher = MagicMock()
+    mock_searcher.hybrid_search.return_value = [
+        SearchResult(doc_id="H1", score=0.8, title="Hybrid", source="fused"),
+    ]
+    mock_bm25 = MagicMock()
+
+    with patch("rak.mcp_server._get_config"), \
+         patch("rak.mcp_server._init_searcher", return_value=(mock_searcher, None, mock_bm25)):
+        result = search_papers("query", hybrid=True)
+
+    data = json.loads(result)
+    assert data[0]["source"] == "fused"
+    mock_searcher.hybrid_search.assert_called_once()

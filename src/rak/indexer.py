@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
 import subprocess
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+_MAX_EXTRACT_WORKERS = min(8, os.cpu_count() or 4)
 
 from rak.bm25 import BM25Index
 from rak.embedder import Embedder
@@ -41,6 +45,31 @@ def build_document_text(item: dict, pdf_text: str = "") -> str:
     return "\n".join(parts)
 
 
+def _extract_item_text(
+    item: dict, storage_dir: Path | None, pdf_provider: str,
+) -> tuple[str, int, int]:
+    """Extract attachment text for a single item (thread-safe).
+
+    Returns (attachment_text, extraction_attempts, extraction_failures).
+    """
+    key = item.get("key", "")
+    if not key or not storage_dir:
+        return "", 0, 0
+    attachments = find_attachments(storage_dir, key)
+    if not attachments:
+        return "", 0, 0
+    attempts = len(attachments)
+    failures = 0
+    texts = []
+    for p in attachments:
+        t = extract_file_text(p, provider=pdf_provider)
+        if t:
+            texts.append(t)
+        else:
+            failures += 1
+    return "\n\n".join(texts), attempts, failures
+
+
 def diff_items(
     items: list[dict], registry: dict[str, str],
     storage_dir: Path | None = None,
@@ -57,25 +86,30 @@ def diff_items(
     fetched_keys = set()
     extraction_attempts = 0
     extraction_failures = 0
-    for item in items:
-        key = item.get("key", "")
-        if not key:
-            continue
+
+    # Phase 1: parallel PDF/attachment extraction
+    attachment_texts: dict[str, str] = {}
+    valid_items = [(item, item.get("key", "")) for item in items]
+    valid_items = [(item, key) for item, key in valid_items if key]
+
+    if storage_dir:
+        with ThreadPoolExecutor(max_workers=_MAX_EXTRACT_WORKERS) as executor:
+            future_to_key = {
+                executor.submit(_extract_item_text, item, storage_dir, pdf_provider): key
+                for item, key in valid_items
+            }
+            for future in as_completed(future_to_key):
+                key = future_to_key[future]
+                att_text, att_attempts, att_failures = future.result()
+                extraction_attempts += att_attempts
+                extraction_failures += att_failures
+                if att_text:
+                    attachment_texts[key] = att_text
+
+    # Phase 2: build documents and diff against registry
+    for item, key in valid_items:
         fetched_keys.add(key)
-        attachment_text = ""
-        if storage_dir:
-            attachments = find_attachments(storage_dir, key)
-            if attachments:
-                extraction_attempts += len(attachments)
-                texts = []
-                for p in attachments:
-                    t = extract_file_text(p, provider=pdf_provider)
-                    if t:
-                        texts.append(t)
-                    else:
-                        extraction_failures += 1
-                attachment_text = "\n\n".join(texts)
-        text = build_document_text(item, pdf_text=attachment_text)
+        text = build_document_text(item, pdf_text=attachment_texts.get(key, ""))
         if not text.strip():
             continue
         text_cache[key] = text
@@ -84,6 +118,7 @@ def diff_items(
             to_add.append(item)
         elif registry[key] != content_hash:
             to_update.append(item)
+
     if extraction_attempts > 0 and extraction_failures > 0:
         rate = extraction_failures / extraction_attempts
         if rate > 0.5:
@@ -204,24 +239,28 @@ def _index_full(
     extraction_attempts = 0
     extraction_failures = 0
 
-    for i, item in enumerate(items):
-        key = item.get("key", "")
-        if not key:
-            continue
-        attachment_text = ""
-        if storage_dir:
-            attachments = find_attachments(storage_dir, key)
-            if attachments:
-                extraction_attempts += len(attachments)
-                texts = []
-                for p in attachments:
-                    t = extract_file_text(p, provider=pdf_provider)
-                    if t:
-                        texts.append(t)
-                    else:
-                        extraction_failures += 1
-                attachment_text = "\n\n".join(texts)
-        text = build_document_text(item, attachment_text)
+    # Phase 1: parallel PDF/attachment extraction
+    valid_items = [(item, item.get("key", "")) for item in items]
+    valid_items = [(item, key) for item, key in valid_items if key]
+
+    attachment_texts: dict[str, str] = {}
+    if storage_dir:
+        with ThreadPoolExecutor(max_workers=_MAX_EXTRACT_WORKERS) as executor:
+            future_to_key = {
+                executor.submit(_extract_item_text, item, storage_dir, pdf_provider): key
+                for item, key in valid_items
+            }
+            for future in as_completed(future_to_key):
+                key = future_to_key[future]
+                att_text, att_attempts, att_failures = future.result()
+                extraction_attempts += att_attempts
+                extraction_failures += att_failures
+                if att_text:
+                    attachment_texts[key] = att_text
+
+    # Phase 2: sequential embedding and indexing
+    for i, (item, key) in enumerate(valid_items):
+        text = build_document_text(item, attachment_texts.get(key, ""))
         if not text.strip():
             continue
         text_cache[key] = text
@@ -247,7 +286,7 @@ def _index_full(
             batch_ids, batch_texts, batch_metadatas = [], [], []
         count += 1
         if on_progress:
-            on_progress(i + 1, len(items))
+            on_progress(i + 1, len(valid_items))
 
     # Flush remaining
     _embed_and_store_batch(batch_ids, batch_texts, batch_metadatas, embedder, vector_store)

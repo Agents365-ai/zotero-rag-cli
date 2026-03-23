@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from click.testing import CliRunner
 
@@ -532,3 +532,325 @@ def test_search_hybrid_mode(tmp_path: Path):
 
     assert result.exit_code == 0
     assert "Hybrid Paper" in result.output
+
+
+# --- similar command tests ---
+
+
+def test_similar_help():
+    runner = CliRunner()
+    result = runner.invoke(main, ["similar", "--help"])
+    assert result.exit_code == 0
+    assert "KEY_OR_TITLE" in result.output
+    assert "--limit" in result.output
+
+
+def test_similar_by_key(tmp_path: Path):
+    from rak.config import RakConfig
+    from rak.searcher import SearchResult
+
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+
+    mock_results = [
+        SearchResult(doc_id="B1", score=0.85, title="Similar Paper", source="similar"),
+    ]
+
+    with patch("rak.cli.RakConfig", return_value=fake_config), \
+         patch("sentence_transformers.SentenceTransformer") as mock_st, \
+         patch("rak.store.VectorStore.__init__", return_value=None), \
+         patch("rak.store.VectorStore.has", return_value=True), \
+         patch("rak.searcher.Searcher.similar_search", return_value=mock_results), \
+         patch("rak.bm25.BM25Index.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.close"):
+        mock_st.return_value.get_sentence_embedding_dimension.return_value = 384
+        result = runner.invoke(main, ["similar", "ABC12345"])
+
+    assert result.exit_code == 0
+    assert "Similar Paper" in result.output
+
+
+def test_similar_no_results(tmp_path: Path):
+    from rak.config import RakConfig
+
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+
+    with patch("rak.cli.RakConfig", return_value=fake_config), \
+         patch("sentence_transformers.SentenceTransformer") as mock_st, \
+         patch("rak.store.VectorStore.__init__", return_value=None), \
+         patch("rak.store.VectorStore.has", return_value=True), \
+         patch("rak.searcher.Searcher.similar_search", return_value=[]), \
+         patch("rak.bm25.BM25Index.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.close"):
+        mock_st.return_value.get_sentence_embedding_dimension.return_value = 384
+        result = runner.invoke(main, ["similar", "ABC12345"])
+
+    assert result.exit_code == 0
+    assert "No similar papers" in result.output
+
+
+# --- reindex command tests ---
+
+
+def test_reindex_help():
+    runner = CliRunner()
+    result = runner.invoke(main, ["reindex", "--help"])
+    assert result.exit_code == 0
+    assert "Clear indexes and rebuild" in result.output
+
+
+def test_reindex_zot_not_found(tmp_path: Path):
+    from rak.config import RakConfig
+
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+
+    with patch("rak.cli.RakConfig", return_value=fake_config), \
+         patch("sentence_transformers.SentenceTransformer") as mock_st, \
+         patch("rak.indexer.shutil.which", return_value=None):
+        mock_st.return_value.get_sentence_embedding_dimension.return_value = 384
+        result = runner.invoke(main, ["reindex"])
+
+    assert result.exit_code == 1
+    assert "not found" in result.output
+
+
+def test_reindex_empty_library(tmp_path: Path):
+    from rak.config import RakConfig
+
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+
+    with patch("rak.cli.RakConfig", return_value=fake_config), \
+         patch("sentence_transformers.SentenceTransformer") as mock_st, \
+         patch("rak.indexer.shutil.which", return_value="/usr/bin/zot"), \
+         patch("rak.indexer.subprocess.run") as mock_run:
+        mock_st.return_value.get_sentence_embedding_dimension.return_value = 384
+        mock_run.return_value.returncode = 0
+        mock_run.return_value.stdout = "[]"
+        result = runner.invoke(main, ["reindex"])
+
+    assert result.exit_code == 0
+    assert "No items found" in result.output
+
+
+# --- ask command tests ---
+
+
+def test_ask_json_output(tmp_path: Path):
+    from rak.config import RakConfig
+    from rak.searcher import SearchResult
+
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+
+    mock_results = [
+        SearchResult(doc_id="D1", score=0.9, title="Context Paper", source="vector", snippet="some context"),
+    ]
+
+    with patch("rak.cli.RakConfig", return_value=fake_config), \
+         patch("sentence_transformers.SentenceTransformer") as mock_st, \
+         patch("rak.searcher.Searcher.vector_search", return_value=mock_results), \
+         patch("rak.store.VectorStore.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.close"), \
+         patch("rak.llm.OpenAI") as mock_openai:
+        mock_st.return_value.get_sentence_embedding_dimension.return_value = 384
+        mock_client = mock_openai.return_value
+        mock_resp = MagicMock()
+        mock_resp.choices = [MagicMock()]
+        mock_resp.choices[0].message.content = "The answer."
+        mock_client.chat.completions.create.return_value = mock_resp
+        result = runner.invoke(main, ["--json", "ask", "What is it?"])
+
+    assert result.exit_code == 0
+    data = json_mod.loads(result.output)
+    assert data["answer"] == "The answer."
+    assert len(data["sources"]) == 1
+
+
+def test_ask_streaming_output(tmp_path: Path):
+    from rak.config import RakConfig
+    from rak.searcher import SearchResult
+
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+
+    mock_results = [
+        SearchResult(doc_id="D1", score=0.9, title="Context Paper", source="vector", snippet="ctx"),
+    ]
+
+    # Build streaming chunks
+    chunks = []
+    for text in ["Hello", " world"]:
+        chunk = MagicMock()
+        chunk.choices = [MagicMock()]
+        chunk.choices[0].delta.content = text
+        chunks.append(chunk)
+
+    with patch("rak.cli.RakConfig", return_value=fake_config), \
+         patch("sentence_transformers.SentenceTransformer") as mock_st, \
+         patch("rak.searcher.Searcher.vector_search", return_value=mock_results), \
+         patch("rak.store.VectorStore.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.close"), \
+         patch("rak.llm.OpenAI") as mock_openai:
+        mock_st.return_value.get_sentence_embedding_dimension.return_value = 384
+        mock_client = mock_openai.return_value
+        mock_client.chat.completions.create.return_value = iter(chunks)
+        result = runner.invoke(main, ["ask", "What is it?"])
+
+    assert result.exit_code == 0
+    assert "Sources:" in result.output
+    assert "D1" in result.output
+
+
+def test_ask_no_results(tmp_path: Path):
+    from rak.config import RakConfig
+
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+
+    with patch("rak.cli.RakConfig", return_value=fake_config), \
+         patch("sentence_transformers.SentenceTransformer") as mock_st, \
+         patch("rak.searcher.Searcher.vector_search", return_value=[]), \
+         patch("rak.store.VectorStore.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.close"):
+        mock_st.return_value.get_sentence_embedding_dimension.return_value = 384
+        result = runner.invoke(main, ["ask", "anything"])
+
+    assert result.exit_code == 0
+    assert "No relevant papers" in result.output
+
+
+def test_ask_llm_connection_error(tmp_path: Path):
+    from rak.config import RakConfig
+    from rak.searcher import SearchResult
+
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+
+    mock_results = [
+        SearchResult(doc_id="D1", score=0.9, title="Paper", source="vector", snippet="ctx"),
+    ]
+
+    with patch("rak.cli.RakConfig", return_value=fake_config), \
+         patch("sentence_transformers.SentenceTransformer") as mock_st, \
+         patch("rak.searcher.Searcher.vector_search", return_value=mock_results), \
+         patch("rak.store.VectorStore.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.close"), \
+         patch("rak.llm.OpenAI") as mock_openai:
+        mock_st.return_value.get_sentence_embedding_dimension.return_value = 384
+        from openai import APIConnectionError
+        mock_client = mock_openai.return_value
+        mock_client.chat.completions.create.side_effect = APIConnectionError(request=MagicMock())
+        result = runner.invoke(main, ["--json", "ask", "test"])
+
+    assert result.exit_code == 1
+    assert "not reachable" in result.output
+
+
+# --- _resolve_key tests ---
+
+from rak.cli import _resolve_key
+
+
+def test_resolve_key_direct_match():
+    mock_vs = MagicMock()
+    mock_vs.has.return_value = True
+    mock_bm25 = MagicMock()
+
+    result = _resolve_key("ABC12345", mock_vs, mock_bm25)
+    assert result == "ABC12345"
+    mock_bm25.search.assert_not_called()
+
+
+def test_resolve_key_not_found_in_store():
+    """Key pattern but not in store -> falls back to title search."""
+    mock_vs = MagicMock()
+    mock_vs.has.return_value = False  # not found for either key or chunk_0
+    mock_bm25 = MagicMock()
+    mock_bm25.search.return_value = []
+
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        result = _resolve_key("ZZZZZZZZ", mock_vs, mock_bm25)
+    assert result is None
+
+
+def test_resolve_key_title_single_match():
+    """Title search returning one result -> auto-select."""
+    mock_vs = MagicMock()
+    mock_vs.has.return_value = False
+    mock_vs.get.return_value = {
+        "ids": ["KEY1"],
+        "metadatas": [{"title": "Attention Is All You Need"}],
+    }
+    mock_bm25 = MagicMock()
+    mock_bm25.search.return_value = [{"id": "KEY1", "score": 5.0}]
+
+    result = _resolve_key("attention is all you need", mock_vs, mock_bm25)
+    assert result == "KEY1"
+
+
+# --- completion command test ---
+
+
+def test_completion_runs():
+    """completion command should invoke subprocess."""
+    runner = CliRunner()
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value.stdout = "# completion script"
+        mock_run.return_value.returncode = 0
+        result = runner.invoke(main, ["completion", "bash"])
+    assert result.exit_code == 0
+
+
+# --- export --bm25 tests ---
+
+
+def test_export_bm25_csv(tmp_path: Path):
+    from rak.config import RakConfig
+    from rak.searcher import SearchResult
+
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+
+    mock_results = [
+        SearchResult(doc_id="BM1", score=5.0, title="BM25 Paper", source="bm25"),
+    ]
+
+    with patch("rak.cli.RakConfig", return_value=fake_config), \
+         patch("rak.searcher.Searcher.bm25_search", return_value=mock_results), \
+         patch("rak.bm25.BM25Index.__init__", return_value=None), \
+         patch("rak.bm25.BM25Index.close"):
+        result = runner.invoke(main, ["export", "test", "--bm25"])
+
+    assert result.exit_code == 0
+    assert "BM1" in result.output
+    assert "BM25 Paper" in result.output
+
+
+# --- config embedding_provider=api display ---
+
+
+def test_config_show_api_embedding(tmp_path: Path):
+    from rak.config import RakConfig, save_config
+
+    save_config(tmp_path, "embedding_provider", "api")
+    save_config(tmp_path, "embedding_base_url", "http://example.com/v1")
+    save_config(tmp_path, "embedding_api_key", "sk-test12345678")
+    fake_config = RakConfig(data_dir=tmp_path)
+    runner = CliRunner()
+    with patch("rak.cli.RakConfig", return_value=fake_config):
+        result = runner.invoke(main, ["config"])
+
+    assert result.exit_code == 0
+    assert "embedding_provider = api" in result.output
+    assert "embedding_base_url = " in result.output
+    assert "embedding_api_key = " in result.output
+    # Key should be masked
+    assert "sk-test12345678" not in result.output
