@@ -422,6 +422,7 @@ graph LR
 - [x] Smart chunking: split by paragraphs/sections instead of fixed 512-word windows
 - [ ] `rak notes KEY`: AI-generated paper summary notes, cached locally for quick review
 - [ ] `rak cluster`: Auto-cluster papers by embedding similarity, discover research themes
+- [ ] Web UI: Streamlit visual search dashboard (low priority)
 
 ## Related Projects
 
