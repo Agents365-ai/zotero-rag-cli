@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import logging
+import subprocess
+import tempfile
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 
-def extract_pdf_text(pdf_path: Path) -> str:
-    if not pdf_path.exists():
-        return ""
+def _extract_via_pymupdf(pdf_path: Path) -> str:
+    """Extract text from a PDF using PyMuPDF (fitz)."""
     try:
         import fitz
         doc = fitz.open(str(pdf_path))
@@ -20,11 +21,49 @@ def extract_pdf_text(pdf_path: Path) -> str:
         return ""
 
 
-def extract_file_text(file_path: Path) -> str:
+def _extract_via_mineru(pdf_path: Path) -> str | None:
+    """Call MinerU CLI to parse a PDF and return the Markdown text.
+    Returns None on any failure so the caller can fall back.
+    """
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        try:
+            result = subprocess.run(
+                ["mineru", "-p", str(pdf_path), "-o", tmp_dir],
+                capture_output=True, text=True, timeout=300,
+            )
+            if result.returncode != 0:
+                logger.warning("MinerU failed for %s: %s", pdf_path, result.stderr)
+                return None
+            stem = pdf_path.stem
+            md_file = Path(tmp_dir) / stem / "auto" / f"{stem}.md"
+            if md_file.exists():
+                return md_file.read_text(encoding="utf-8").strip()
+            md_files = list(Path(tmp_dir).rglob("*.md"))
+            if md_files:
+                return md_files[0].read_text(encoding="utf-8").strip()
+            logger.warning("MinerU produced no markdown for %s", pdf_path)
+            return None
+        except Exception as exc:
+            logger.warning("MinerU error for %s: %s", pdf_path, exc)
+            return None
+
+
+def extract_pdf_text(pdf_path: Path, provider: str = "pymupdf") -> str:
+    if not pdf_path.exists():
+        return ""
+    if provider == "mineru":
+        text = _extract_via_mineru(pdf_path)
+        if text is not None:
+            return text
+        logger.warning("Falling back to PyMuPDF for %s", pdf_path)
+    return _extract_via_pymupdf(pdf_path)
+
+
+def extract_file_text(file_path: Path, provider: str = "pymupdf") -> str:
     """Extract text from a PDF or Markdown file."""
     suffix = file_path.suffix.lower()
     if suffix == ".pdf":
-        return extract_pdf_text(file_path)
+        return extract_pdf_text(file_path, provider=provider)
     if suffix == ".md":
         try:
             return file_path.read_text(encoding="utf-8").strip()

@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import patch, MagicMock
 
 from rak.pdf import chunk_text, extract_pdf_text, extract_file_text, find_attachments, _split_paragraphs
 
@@ -140,3 +141,67 @@ def test_chunk_text_no_paragraph_structure():
     assert len(chunks) > 1
     first_words = chunks[0].split()
     assert len(first_words) == 30
+
+
+def test_extract_pdf_text_mineru_provider(tmp_path: Path):
+    """MinerU provider calls subprocess and reads markdown output."""
+    pdf_file = tmp_path / "paper.pdf"
+    pdf_file.write_bytes(b"%PDF-1.4 fake")
+
+    def fake_run(cmd, **kwargs):
+        # Simulate mineru writing a markdown file
+        # The output dir is the last argument
+        output_dir = Path(cmd[-1])
+        output_dir.mkdir(parents=True, exist_ok=True)
+        auto_dir = output_dir / pdf_file.stem / "auto"
+        auto_dir.mkdir(parents=True, exist_ok=True)
+        md_file = auto_dir / (pdf_file.stem + ".md")
+        md_file.write_text("# Parsed Title\n\nTable | Data\n---|---\n1 | 2")
+        result = MagicMock()
+        result.returncode = 0
+        return result
+
+    with patch("rak.pdf.subprocess.run", side_effect=fake_run):
+        text = extract_pdf_text(pdf_file, provider="mineru")
+
+    assert "Parsed Title" in text
+    assert "Table" in text
+
+
+def test_extract_pdf_text_mineru_fallback_on_failure(tmp_path: Path):
+    """When MinerU fails, falls back to PyMuPDF."""
+    pdf_file = FIXTURES / "sample.pdf"
+
+    def fake_run(cmd, **kwargs):
+        result = MagicMock()
+        result.returncode = 1
+        result.stderr = "mineru not found"
+        return result
+
+    with patch("rak.pdf.subprocess.run", side_effect=fake_run):
+        text = extract_pdf_text(pdf_file, provider="mineru")
+
+    # Should fall back to PyMuPDF and extract text
+    assert "test PDF document" in text
+
+
+def test_extract_pdf_text_mineru_fallback_on_exception(tmp_path: Path):
+    """When MinerU subprocess raises, falls back to PyMuPDF."""
+    pdf_file = FIXTURES / "sample.pdf"
+
+    with patch("rak.pdf.subprocess.run", side_effect=FileNotFoundError("mineru not found")):
+        text = extract_pdf_text(pdf_file, provider="mineru")
+
+    assert "test PDF document" in text
+
+
+def test_extract_file_text_passes_provider(tmp_path: Path):
+    """extract_file_text passes provider to extract_pdf_text."""
+    pdf_file = tmp_path / "test.pdf"
+    pdf_file.write_bytes(b"%PDF-1.4 fake")
+
+    with patch("rak.pdf.extract_pdf_text", return_value="mineru text") as mock:
+        text = extract_file_text(pdf_file, provider="mineru")
+
+    mock.assert_called_once_with(pdf_file, provider="mineru")
+    assert text == "mineru text"
