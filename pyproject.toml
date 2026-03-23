@@ -1,6 +1,6 @@
 [project]
 name = "zotero-rag-cli"
-version = "0.6.0"
+version = "0.6.1"
 description = "rak — Semantic search over your Zotero library"
 requires-python = ">=3.10"
 license = "CC-BY-NC-4.0"
