@@ -44,6 +44,7 @@ def build_document_text(item: dict, pdf_text: str = "") -> str:
 def diff_items(
     items: list[dict], registry: dict[str, str],
     storage_dir: Path | None = None,
+    pdf_provider: str = "pymupdf",
 ) -> tuple[list[dict], list[dict], list[str], dict[str, str]]:
     """Compare items against registry to find changes.
 
@@ -63,7 +64,7 @@ def diff_items(
         if storage_dir:
             attachments = find_attachments(storage_dir, key)
             if attachments:
-                attachment_text = "\n\n".join(t for p in attachments if (t := extract_file_text(p)))
+                attachment_text = "\n\n".join(t for p in attachments if (t := extract_file_text(p, provider=pdf_provider)))
         text = build_document_text(item, pdf_text=attachment_text)
         if not text.strip():
             continue
@@ -102,10 +103,11 @@ def index_items(
     storage_dir: Path | None = None,
     chunk_size: int = 512,
     chunk_overlap: int = 64,
+    pdf_provider: str = "pymupdf",
 ) -> dict | tuple[int, dict[str, str]]:
     if registry is not None:
-        return _index_incremental(items, embedder, vector_store, bm25_index, on_progress, registry, storage_dir, chunk_size, chunk_overlap)
-    return _index_full(items, embedder, vector_store, bm25_index, on_progress, storage_dir, chunk_size, chunk_overlap)
+        return _index_incremental(items, embedder, vector_store, bm25_index, on_progress, registry, storage_dir, chunk_size, chunk_overlap, pdf_provider)
+    return _index_full(items, embedder, vector_store, bm25_index, on_progress, storage_dir, chunk_size, chunk_overlap, pdf_provider)
 
 
 def _delete_chunks(vector_store: VectorStore, key: str) -> None:
@@ -159,6 +161,7 @@ def _index_full(
     storage_dir: Path | None = None,
     chunk_size: int = 512,
     chunk_overlap: int = 64,
+    pdf_provider: str = "pymupdf",
 ) -> tuple[int, dict[str, str]]:
     """Index all items. Returns (count, text_cache) where text_cache maps keys to document text."""
     count = 0
@@ -176,7 +179,7 @@ def _index_full(
         if storage_dir:
             attachments = find_attachments(storage_dir, key)
             if attachments:
-                attachment_text = "\n\n".join(t for p in attachments if (t := extract_file_text(p)))
+                attachment_text = "\n\n".join(t for p in attachments if (t := extract_file_text(p, provider=pdf_provider)))
         text = build_document_text(item, attachment_text)
         if not text.strip():
             continue
@@ -220,8 +223,9 @@ def _index_incremental(
     storage_dir: Path | None = None,
     chunk_size: int = 512,
     chunk_overlap: int = 64,
+    pdf_provider: str = "pymupdf",
 ) -> dict[str, int]:
-    to_add, to_update, to_remove, text_cache = diff_items(items, registry, storage_dir=storage_dir)
+    to_add, to_update, to_remove, text_cache = diff_items(items, registry, storage_dir=storage_dir, pdf_provider=pdf_provider)
     new_registry = dict(registry)
     added = 0
     updated = 0
