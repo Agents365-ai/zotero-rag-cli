@@ -82,12 +82,12 @@ def index(ctx: click.Context, limit: int, full: bool) -> None:
                 if full:
                     vector_store.clear()
                     bm25.clear()
-                count, text_cache = index_items(items, embedder, vector_store, bm25, on_progress, storage_dir=storage_dir, chunk_size=config.chunk_size, chunk_overlap=config.chunk_overlap)
+                count, text_cache = index_items(items, embedder, vector_store, bm25, on_progress, storage_dir=storage_dir, chunk_size=config.chunk_size, chunk_overlap=config.chunk_overlap, pdf_provider=config.pdf_provider)
                 new_registry = {k: compute_hash(v) for k, v in text_cache.items()}
                 save_registry(config.data_dir, new_registry)
                 click.echo(format_index_stats(count, output_json=json_out))
             else:
-                result = index_items(items, embedder, vector_store, bm25, on_progress, registry=registry, storage_dir=storage_dir, chunk_size=config.chunk_size, chunk_overlap=config.chunk_overlap)
+                result = index_items(items, embedder, vector_store, bm25, on_progress, registry=registry, storage_dir=storage_dir, chunk_size=config.chunk_size, chunk_overlap=config.chunk_overlap, pdf_provider=config.pdf_provider)
                 save_registry(config.data_dir, result["registry"])
                 click.echo(format_incremental_stats(result, output_json=json_out))
 
@@ -198,6 +198,7 @@ def config_cmd(ctx: click.Context, key: str | None, value: str | None) -> None:
             click.echo(f"embedding_base_url = {config.embedding_base_url}")
             emb_key = config.embedding_api_key if config.embedding_api_key == "not-needed" else config.embedding_api_key[:8] + "..."
             click.echo(f"embedding_api_key = {emb_key}")
+        click.echo(f"pdf_provider = {config.pdf_provider}")
         click.echo(f"data_dir = {config.data_dir}")
         click.echo(f"zotero_storage_dir = {config.zotero_storage_dir}")
 
