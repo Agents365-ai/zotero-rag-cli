@@ -298,8 +298,8 @@ def _resolve_key(key_or_title: str, vector_store, bm25) -> str | None:
         click.echo(f"  {i}. [{doc_id}] {title}")
 
     try:
-        choice = input("Select number (or Enter to cancel): ").strip()
-    except (EOFError, KeyboardInterrupt):
+        choice = click.prompt("Select number (or Enter to cancel)", default="", show_default=False).strip()
+    except (click.Abort, EOFError, KeyboardInterrupt):
         click.echo()
         return None
     if not choice:

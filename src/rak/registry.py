@@ -12,7 +12,22 @@ def compute_hash(text: str) -> str:
 
 
 def save_registry(data_dir: Path, registry: dict[str, str]) -> None:
-    (data_dir / REGISTRY_FILENAME).write_text(json.dumps(registry))
+    import os
+    import tempfile
+    target = data_dir / REGISTRY_FILENAME
+    fd, tmp_path = tempfile.mkstemp(dir=data_dir, suffix=".tmp")
+    try:
+        os.write(fd, json.dumps(registry).encode())
+        os.close(fd)
+        os.replace(tmp_path, target)
+    except BaseException:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
 
 
 def load_registry(data_dir: Path) -> dict[str, str]:

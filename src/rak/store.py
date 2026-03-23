@@ -53,7 +53,7 @@ class VectorStore:
                 "id": results["ids"][0][i],
                 "document": results["documents"][0][i],
                 "metadata": results["metadatas"][0][i],
-                "score": 1.0 - results["distances"][0][i],
+                "score": max(0.0, 1.0 - results["distances"][0][i]),
             })
         return items
 

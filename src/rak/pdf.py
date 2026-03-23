@@ -121,10 +121,11 @@ def _chunk_words(text: str, chunk_size: int, overlap: int) -> list[str]:
         return []
     chunks = []
     start = 0
+    step = max(chunk_size - overlap, 1)
     while start < len(words):
         end = start + chunk_size
         chunks.append(" ".join(words[start:end]))
-        start = end - overlap
+        start += step
     return chunks
 
 

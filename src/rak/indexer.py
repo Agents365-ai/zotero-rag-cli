@@ -155,6 +155,13 @@ def _build_metadata(item: dict) -> dict:
         "date": item.get("date", ""),
         "item_type": item.get("item_type", ""),
     }
+    creators = item.get("creators", [])
+    if creators:
+        author_parts = [
+            " ".join(p for p in [c.get("first_name", ""), c.get("last_name", "")] if p)
+            for c in creators
+        ]
+        metadata["authors"] = ", ".join(author_parts)
     if collections:
         metadata["collections"] = collections
     if tags:
@@ -330,7 +337,7 @@ def _index_incremental(
         "added": added,
         "updated": updated,
         "removed": len(to_remove),
-        "unchanged": len(items) - added - updated,
+        "unchanged": len(items) - len(to_add) - len(to_update),
         "registry": new_registry,
         "text_cache": text_cache,
     }

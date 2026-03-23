@@ -36,6 +36,17 @@ def _init_searcher(config: RakConfig):
     global _cached_searcher
     with _searcher_lock:
         if _cached_searcher is not None:
+            # Validate cached BM25 connection is still usable
+            _, _, bm25 = _cached_searcher
+            try:
+                if not config.fts_db_path.exists():
+                    raise FileNotFoundError
+                bm25.search("", limit=1)  # lightweight probe
+            except Exception:
+                bm25.close()
+                _cached_searcher = None
+
+        if _cached_searcher is not None:
             return _cached_searcher
 
         from rak.bm25 import BM25Index

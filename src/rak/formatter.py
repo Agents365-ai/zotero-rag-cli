@@ -39,7 +39,7 @@ def format_index_stats(count: int, output_json: bool = False) -> str:
 
 def format_incremental_stats(stats: dict, output_json: bool = False) -> str:
     if output_json:
-        return json.dumps({k: v for k, v in stats.items() if k != "registry"})
+        return json.dumps({k: v for k, v in stats.items() if k not in ("registry", "text_cache")})
     parts = []
     if stats["added"]:
         parts.append(f"{stats['added']} new")
