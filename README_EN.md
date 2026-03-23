@@ -420,6 +420,8 @@ graph LR
 - [x] MinerU / Docling PDF parsing: `rak config pdf_provider mineru` or `docling` for high-quality PDF extraction (preserves tables/formulas/layout), auto-fallback to PyMuPDF on failure
 - [x] `rak similar KEY` to find papers similar to a given one
 - [x] Smart chunking: split by paragraphs/sections instead of fixed 512-word windows
+- [ ] `rak notes KEY`: AI-generated paper summary notes, cached locally for quick review
+- [ ] `rak cluster`: Auto-cluster papers by embedding similarity, discover research themes
 
 ## Related Projects
 

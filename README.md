@@ -420,6 +420,8 @@ graph LR
 - [x] MinerU / Docling PDF 解析支持：`rak config pdf_provider mineru` 或 `docling` 启用高质量 PDF 提取（表格/公式/排版保留），失败自动回退 PyMuPDF
 - [x] `rak similar KEY` 查找与指定论文相似的论文
 - [x] 智能分块：按段落/章节切分替代固定 512 词窗口
+- [ ] `rak notes KEY`：AI 生成论文摘要笔记，本地缓存，快速回顾论文要点
+- [ ] `rak cluster`：基于嵌入向量相似度自动聚类论文，发现研究主题
 
 ## 相关项目
 
