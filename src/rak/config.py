@@ -8,7 +8,7 @@ DEFAULT_MODEL = "all-MiniLM-L6-v2"
 
 
 CONFIG_FILENAME = "config.json"
-CONFIGURABLE_KEYS = {"llm_base_url", "llm_model", "llm_api_key", "model_name", "zot_command", "chunk_size", "chunk_overlap", "embedding_provider", "embedding_base_url", "embedding_api_key"}
+CONFIGURABLE_KEYS = {"llm_base_url", "llm_model", "llm_api_key", "model_name", "zot_command", "chunk_size", "chunk_overlap", "embedding_provider", "embedding_base_url", "embedding_api_key", "pdf_provider"}
 CONFIG_TYPES: dict[str, type] = {"chunk_size": int, "chunk_overlap": int}
 
 
@@ -84,6 +84,7 @@ class RakConfig:
     embedding_provider: str = "local"
     embedding_base_url: str = "http://localhost:11434/v1"
     embedding_api_key: str = "not-needed"
+    pdf_provider: str = "pymupdf"
 
     def __post_init__(self) -> None:
         saved = load_config(self.data_dir)

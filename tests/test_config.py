@@ -74,3 +74,21 @@ def test_config_loads_chunk_size_as_int(tmp_path: Path):
     config = RakConfig(data_dir=tmp_path)
     assert config.chunk_size == 128
     assert isinstance(config.chunk_size, int)
+
+
+def test_save_and_load_pdf_provider(tmp_path: Path):
+    save_config(tmp_path, "pdf_provider", "mineru")
+    cfg = load_config(tmp_path)
+    assert cfg["pdf_provider"] == "mineru"
+
+
+def test_config_loads_pdf_provider(tmp_path: Path):
+    import json
+    (tmp_path / "config.json").write_text(json.dumps({"pdf_provider": "mineru"}))
+    config = RakConfig(data_dir=tmp_path)
+    assert config.pdf_provider == "mineru"
+
+
+def test_config_default_pdf_provider(tmp_path: Path):
+    config = RakConfig(data_dir=tmp_path)
+    assert config.pdf_provider == "pymupdf"
