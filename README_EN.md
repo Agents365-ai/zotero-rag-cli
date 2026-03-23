@@ -432,6 +432,7 @@ graph LR
 - [ ] Async PDF extraction: parallelize the slowest part of indexing
 - [ ] GitHub Actions CI: automate tests + PyPI publishing on tag
 - [x] README update: document MCP tools and v0.6.1 improvements
+- [ ] Documentation site: MkDocs Material + GitHub Pages (after `notes` and `cluster` are done)
 
 ## Related Projects
 
