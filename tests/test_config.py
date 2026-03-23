@@ -92,3 +92,15 @@ def test_config_loads_pdf_provider(tmp_path: Path):
 def test_config_default_pdf_provider(tmp_path: Path):
     config = RakConfig(data_dir=tmp_path)
     assert config.pdf_provider == "pymupdf"
+
+
+def test_save_config_rejects_invalid_pdf_provider(tmp_path: Path):
+    with pytest.raises(ValueError, match="Invalid pdf_provider"):
+        save_config(tmp_path, "pdf_provider", "invalid_provider")
+
+
+def test_save_config_accepts_valid_pdf_providers(tmp_path: Path):
+    for provider in ("pymupdf", "mineru", "docling"):
+        save_config(tmp_path, "pdf_provider", provider)
+        cfg = load_config(tmp_path)
+        assert cfg["pdf_provider"] == provider

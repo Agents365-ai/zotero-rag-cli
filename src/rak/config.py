@@ -10,6 +10,7 @@ DEFAULT_MODEL = "all-MiniLM-L6-v2"
 CONFIG_FILENAME = "config.json"
 CONFIGURABLE_KEYS = {"llm_base_url", "llm_model", "llm_api_key", "model_name", "zot_command", "chunk_size", "chunk_overlap", "embedding_provider", "embedding_base_url", "embedding_api_key", "pdf_provider"}
 CONFIG_TYPES: dict[str, type] = {"chunk_size": int, "chunk_overlap": int}
+VALID_PDF_PROVIDERS = {"pymupdf", "mineru", "docling"}
 
 
 def _coerce_config_value(key: str, value: str | int | float) -> str | int:
@@ -56,6 +57,8 @@ def save_config(data_dir: Path, key: str, value: str) -> None:
     import json
     if key == "zot_command":
         _validate_zot_command(value)
+    if key == "pdf_provider" and value not in VALID_PDF_PROVIDERS:
+        raise ValueError(f"Invalid pdf_provider: {value!r} — must be one of {sorted(VALID_PDF_PROVIDERS)}")
     coerced = _coerce_config_value(key, value)
     data_dir.mkdir(parents=True, exist_ok=True)
     cfg = load_config(data_dir)

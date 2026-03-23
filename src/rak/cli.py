@@ -57,6 +57,8 @@ def index(ctx: click.Context, limit: int, full: bool) -> None:
         storage_dir = config.zotero_storage_dir
         if storage_dir:
             click.echo(f"PDF extraction enabled: {storage_dir}")
+            if config.pdf_provider != "pymupdf":
+                click.echo(f"PDF provider: {config.pdf_provider} (slower but higher quality)")
         else:
             click.echo("PDF extraction: Zotero storage not found, indexing metadata only.")
 
@@ -73,7 +75,8 @@ def index(ctx: click.Context, limit: int, full: bool) -> None:
                  MofNCompleteColumn(),
                  TimeRemainingColumn(),
              ) as progress:
-            task = progress.add_task("Indexing", total=len(items))
+            task_desc = f"Indexing ({config.pdf_provider})" if config.pdf_provider != "pymupdf" else "Indexing"
+            task = progress.add_task(task_desc, total=len(items))
 
             def on_progress(current: int, total: int) -> None:
                 progress.update(task, completed=current)
@@ -178,7 +181,12 @@ def config_cmd(ctx: click.Context, key: str | None, value: str | None) -> None:
             click.echo(f"Valid keys: {', '.join(sorted(CONFIGURABLE_KEYS))}", err=True)
             ctx.exit(1)
             return
-        save_config(config.data_dir, key, value)
+        try:
+            save_config(config.data_dir, key, value)
+        except ValueError as exc:
+            click.echo(f"Error: {exc}", err=True)
+            ctx.exit(1)
+            return
         click.echo(f"{key} = {value}")
     elif key:
         if hasattr(config, key):
