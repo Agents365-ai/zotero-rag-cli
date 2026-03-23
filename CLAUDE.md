@@ -101,4 +101,4 @@ PyPI token is available via `$PYPI_TOKEN` environment variable (set in `~/.zshrc
 
 ## Testing
 
-168 tests. `@pytest.mark.network` marks tests requiring model downloads. CI runs `pytest -m "not network"`.
+169 tests. `@pytest.mark.network` marks tests requiring model downloads. CI runs `pytest -m "not network"`.

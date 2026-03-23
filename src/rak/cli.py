@@ -258,14 +258,75 @@ def config_cmd(ctx: click.Context, key: str | None, value: str | None) -> None:
         click.echo(f"zotero_storage_dir = {config.zotero_storage_dir}")
 
 
+def _resolve_key(key_or_title: str, vector_store, bm25) -> str | None:
+    """Resolve a key or title query to a Zotero key.
+
+    If the argument looks like a Zotero key (short alphanumeric, exists in index),
+    return it directly. Otherwise treat it as a title search and let the user pick.
+    """
+    import re
+    # Zotero keys are typically 8 alphanumeric chars (e.g., ABC12345)
+    if re.match(r'^[A-Za-z0-9]{4,12}$', key_or_title):
+        if vector_store.has(key_or_title) or vector_store.has(f"{key_or_title}_chunk_0"):
+            return key_or_title
+
+    # Treat as title search via BM25
+    results = bm25.search(key_or_title, limit=10)
+    if not results:
+        click.echo(f"No papers found matching '{key_or_title}'.")
+        return None
+
+    # Get titles from vector store metadata
+    ids = [r["id"] for r in results]
+    # Filter to parent keys (strip chunk suffixes)
+    parent_ids = list(dict.fromkeys(
+        doc_id.split("_chunk_")[0] if "_chunk_" in doc_id else doc_id
+        for doc_id in ids
+    ))
+    doc_data = vector_store.get(ids=parent_ids, include=["metadatas"])
+    titles = {doc_id: meta.get("title", doc_id) for doc_id, meta in zip(doc_data["ids"], doc_data["metadatas"])}
+
+    if len(titles) == 1:
+        chosen = list(titles.keys())[0]
+        click.echo(f"Matched: {titles[chosen]}")
+        return chosen
+
+    # Multiple matches — let user pick
+    click.echo(f"Found {len(titles)} papers matching '{key_or_title}':")
+    items = list(titles.items())
+    for i, (doc_id, title) in enumerate(items, 1):
+        click.echo(f"  {i}. [{doc_id}] {title}")
+
+    try:
+        choice = input("Select number (or Enter to cancel): ").strip()
+    except (EOFError, KeyboardInterrupt):
+        click.echo()
+        return None
+    if not choice:
+        return None
+    try:
+        idx = int(choice) - 1
+        if 0 <= idx < len(items):
+            return items[idx][0]
+    except ValueError:
+        pass
+    click.echo("Invalid selection.")
+    return None
+
+
 @main.command()
-@click.argument("key")
+@click.argument("key_or_title")
 @click.option("--limit", default=10, help="Number of results")
 @click.option("--collection", default=None, help="Filter by Zotero collection name")
 @click.option("--tag", "tags", multiple=True, help="Filter by tag (repeatable, OR logic)")
 @click.pass_context
-def similar(ctx: click.Context, key: str, limit: int, collection: str | None, tags: tuple[str, ...]) -> None:
-    """Find papers similar to a given one by its Zotero key."""
+def similar(ctx: click.Context, key_or_title: str, limit: int, collection: str | None, tags: tuple[str, ...]) -> None:
+    """Find papers similar to a given one by its Zotero key or title.
+
+    KEY_OR_TITLE can be a Zotero item key (e.g., ABC12345) or a title search
+    query (e.g., "attention is all you need"). If multiple papers match,
+    you will be prompted to select one.
+    """
     from rak.bm25 import BM25Index
     from rak.formatter import format_results
     from rak.searcher import Searcher
@@ -278,11 +339,15 @@ def similar(ctx: click.Context, key: str, limit: int, collection: str | None, ta
         embedder = _create_embedder(config)
         vector_store = VectorStore(config.chroma_dir, embedder.dimension)
         with BM25Index(config.fts_db_path) as bm25:
+            key = _resolve_key(key_or_title, vector_store, bm25)
+            if key is None:
+                return
+
             searcher = Searcher(embedder, vector_store, bm25)
             results = searcher.similar_search(key, limit=limit, collection=collection, tags=list(tags) or None)
 
         if not results:
-            click.echo(f"No similar papers found for key '{key}'. Check the key exists in the index.")
+            click.echo(f"No similar papers found for '{key_or_title}'.")
             return
 
         output = format_results(results, output_json=json_out)

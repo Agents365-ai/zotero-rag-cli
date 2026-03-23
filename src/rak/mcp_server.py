@@ -114,22 +114,56 @@ def search_papers_bm25(query: str, limit: int = 10) -> str:
     return json.dumps(output, indent=2, ensure_ascii=False)
 
 
+def _resolve_key_mcp(key_or_title: str, vector_store, bm25) -> tuple[str | None, list[dict] | None]:
+    """Resolve a key or title to a Zotero key for MCP (non-interactive).
+
+    Returns (resolved_key, candidates_or_none). If multiple matches,
+    returns (None, candidates) so the caller can return them to the AI.
+    """
+    import re
+    if re.match(r'^[A-Za-z0-9]{4,12}$', key_or_title):
+        if vector_store.has(key_or_title) or vector_store.has(f"{key_or_title}_chunk_0"):
+            return key_or_title, None
+
+    results = bm25.search(key_or_title, limit=10)
+    if not results:
+        return None, None
+
+    parent_ids = list(dict.fromkeys(
+        doc_id.split("_chunk_")[0] if "_chunk_" in doc_id else doc_id
+        for doc_id in [r["id"] for r in results]
+    ))
+    doc_data = vector_store.get(ids=parent_ids, include=["metadatas"])
+    candidates = [{"key": doc_id, "title": meta.get("title", doc_id)}
+                  for doc_id, meta in zip(doc_data["ids"], doc_data["metadatas"])]
+
+    if len(candidates) == 1:
+        return candidates[0]["key"], None
+    return None, candidates
+
+
 @mcp.tool()
-def similar_papers(key: str, limit: int = 10,
+def similar_papers(key_or_title: str, limit: int = 10,
                    collection: str | None = None, tags: list[str] | None = None) -> str:
-    """Find papers similar to a given one by its Zotero key.
+    """Find papers similar to a given one by its Zotero key or title.
 
     Args:
-        key: Zotero item key of the source paper
+        key_or_title: Zotero item key (e.g., ABC12345) or title search query (e.g., "attention is all you need")
         limit: Maximum number of similar papers to return (default 10)
         collection: Filter by Zotero collection name
         tags: Filter by tags (OR logic)
 
     Returns:
-        JSON array of similar papers with key, title, score, and source.
+        JSON array of similar papers, or candidate list if multiple title matches found.
     """
     config = _get_config()
-    searcher, _, _ = _init_searcher(config)
+    searcher, vector_store, bm25 = _init_searcher(config)
+
+    key, candidates = _resolve_key_mcp(key_or_title, vector_store, bm25)
+    if key is None and candidates:
+        return json.dumps({"status": "multiple_matches", "query": key_or_title, "candidates": candidates}, indent=2)
+    if key is None:
+        return json.dumps({"status": "not_found", "query": key_or_title})
 
     tag_list = tags if tags else None
     results = searcher.similar_search(key, limit=limit, collection=collection, tags=tag_list)

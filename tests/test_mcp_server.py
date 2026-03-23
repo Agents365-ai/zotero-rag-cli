@@ -3,6 +3,7 @@ from unittest.mock import patch, MagicMock
 from rak.mcp_server import (
     mcp, search_papers, search_papers_bm25, similar_papers,
     ask_papers, export_papers, show_config, index_status,
+    _resolve_key_mcp,
 )
 
 
@@ -90,7 +91,8 @@ def test_similar_papers_returns_json():
     mock_bm25 = MagicMock()
 
     with patch("rak.mcp_server._get_config"), \
-         patch("rak.mcp_server._init_searcher", return_value=(mock_searcher, None, mock_bm25)):
+         patch("rak.mcp_server._init_searcher", return_value=(mock_searcher, None, mock_bm25)), \
+         patch("rak.mcp_server._resolve_key_mcp", return_value=("KEY1", None)):
         result = similar_papers("KEY1", limit=5)
 
     data = json.loads(result)
@@ -98,6 +100,23 @@ def test_similar_papers_returns_json():
     assert data[0]["key"] == "C1"
     assert data[0]["source"] == "similar"
     mock_searcher.similar_search.assert_called_once_with("KEY1", limit=5, collection=None, tags=None)
+
+
+def test_similar_papers_title_search():
+    import json
+
+    mock_searcher = MagicMock()
+    mock_bm25 = MagicMock()
+    candidates = [{"key": "A1", "title": "Paper One"}, {"key": "A2", "title": "Paper Two"}]
+
+    with patch("rak.mcp_server._get_config"), \
+         patch("rak.mcp_server._init_searcher", return_value=(mock_searcher, None, mock_bm25)), \
+         patch("rak.mcp_server._resolve_key_mcp", return_value=(None, candidates)):
+        result = similar_papers("attention", limit=5)
+
+    data = json.loads(result)
+    assert data["status"] == "multiple_matches"
+    assert len(data["candidates"]) == 2
 
 
 def test_ask_papers_returns_answer():
