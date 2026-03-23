@@ -60,22 +60,22 @@ zot CLI → indexer (fetch + parse + PDF/MD extract) → embedder → vector sto
 - **embedder.py** — Supports two providers: `local` (SentenceTransformer) and `api` (OpenAI-compatible `/v1/embeddings`). `embed()` for single, `embed_batch()` for bulk. Suppresses noisy model loading output.
 - **store.py** — `VectorStore` wrapping ChromaDB persistent client. Collection `rak_papers`, cosine distance. `search()` clamps `n_results` to collection size. `get_ids_by_metadata()` returns IDs only.
 - **bm25.py** — `BM25Index` using SQLite FTS5 virtual table. `add()` ensures uniqueness via delete-before-insert. `search_with_snippet()` returns FTS5 snippet highlights. Implements context manager for safe resource cleanup.
-- **indexer.py** — Orchestrates: `fetch_zot_items()` shells out to `zot --json --limit list`, `build_document_text()` concatenates title/authors/abstract/tags/attachment_text, `diff_items()` computes add/update/remove sets with text cache to avoid redundant extraction, `index_items()` supports both full and incremental modes via registry. Long documents are chunked into overlapping segments stored as separate vectors.
+- **indexer.py** — Orchestrates: `fetch_zot_items()` shells out to `zot --json --limit list`, `build_document_text()` concatenates title/authors/abstract/tags/attachment_text, `diff_items()` computes add/update/remove sets with text cache to avoid redundant extraction, `index_items()` supports both full and incremental modes via registry. Long documents are chunked into overlapping segments stored as separate vectors. PDF extraction is parallelized via `ThreadPoolExecutor` (I/O-bound); embedding remains sequential (model not thread-safe). `_build_metadata()` stores authors in ChromaDB metadata for BibTeX export.
 - **searcher.py** — `Searcher` with dependency-injected embedder/store/bm25 (embedder and store are optional for BM25-only mode). `build_where_filter()` builds ChromaDB metadata filters. `bm25_search()` does pure keyword search without loading embeddings. `hybrid_search()` fuses vector + BM25 via `rrf_fuse(k=60)`. `similar_search()` finds papers similar to a given key using its stored embedding. Chunk results are deduplicated to parent papers via `_deduplicate_chunks()`. Results include `snippet` from the best-matched chunk.
 - **formatter.py** — Rich tables, JSON output (with optional snippets), incremental stats, and ask result formatting.
 - **pdf.py** — `extract_pdf_text()` supports three providers: `pymupdf` (default, PyMuPDF), `mineru` (MinerU CLI), and `docling` (Docling CLI) for structured Markdown output with table/formula preservation. Falls back to PyMuPDF on failure. `extract_file_text()` handles PDF and Markdown, passing `provider` through. `find_attachments()` locates all PDF/MD files per Zotero item. `chunk_text()` splits text preferring paragraph/section boundaries (double newlines, markdown headings), merging small paragraphs up to `chunk_size` words and falling back to word-level overlap for oversized paragraphs. Validates `overlap < chunk_size`.
 - **llm.py** — `LLMClient` wrapping OpenAI SDK for chat completions. Compatible with Ollama, LM Studio, OpenAI, DeepSeek, and any OpenAI-compatible endpoint.
 - **export.py** — `to_csv()` and `to_bibtex()` formatters with BibTeX special character escaping and proper Zotero-to-BibTeX type mapping.
-- **metadata.py** — `IndexMetadata` dataclass, `save_metadata()`/`load_metadata()` for tracking index state.
-- **registry.py** — Content hash registry (`registry.json`) for incremental indexing. `compute_hash()`, `save_registry()`, `load_registry()`.
+- **metadata.py** — `IndexMetadata` dataclass, `save_metadata()`/`load_metadata()` for tracking index state. Atomic writes via tempfile + `os.replace()`. `load_metadata()` handles corrupt JSON gracefully.
+- **registry.py** — Content hash registry (`registry.json`) for incremental indexing. `compute_hash()`, `save_registry()`, `load_registry()`. Atomic writes via tempfile + `os.replace()`. `load_registry()` handles corrupt JSON gracefully.
 - **errors.py** — Custom exception hierarchy: `RakError` → `ZotNotFoundError`, `EmptyLibraryError`, `ModelDownloadError`.
-- **mcp_server.py** — MCP server exposing tools for AI assistants (Cursor, LM Studio): `search_papers` (vector/hybrid), `search_papers_bm25` (keyword), `similar_papers`, `ask_papers` (LLM Q&A), `export_papers` (CSV/BibTeX), `show_config`, `index_status`. Thread-safe cached searcher with `atexit` cleanup.
+- **mcp_server.py** — MCP server exposing tools for AI assistants (Cursor, LM Studio): `search_papers` (vector/hybrid), `search_papers_bm25` (keyword), `similar_papers`, `ask_papers` (LLM Q&A), `export_papers` (CSV/BibTeX), `show_config`, `index_status`. Thread-safe cached searcher with `atexit` cleanup and staleness validation (detects deleted DB after `rak clear`).
 
 **Design decisions:**
 - All computation is local by default — no API keys needed for search. Embedding and LLM can optionally use remote APIs.
 - Data stored in `~/Zotero/rak/`: `chroma/` for vectors, `fts.sqlite` for keywords, `meta.json`, `registry.json`, `config.json`.
 - `zot` CLI is a required external dependency for data ingestion.
-- Indexing is incremental by default — content hashes detect new/changed/deleted items. PDF text is cached during indexing to avoid redundant extraction.
+- Indexing is incremental by default — content hashes detect new/changed/deleted items. PDF text is cached during indexing to avoid redundant extraction. PDF extraction is parallelized via ThreadPoolExecutor.
 - All PDF and Markdown attachments per Zotero item are extracted and merged for indexing.
 - BM25 `add()` uses delete-before-insert to prevent duplicate doc_ids.
 - All CLI commands use `with BM25Index(...)` context manager to prevent SQLite connection leaks.
@@ -101,4 +101,4 @@ PyPI token is available via `$PYPI_TOKEN` environment variable (set in `~/.zshrc
 
 ## Testing
 
-169 tests. `@pytest.mark.network` marks tests requiring model downloads. CI runs `pytest -m "not network"`.
+241 tests (79% coverage). `@pytest.mark.network` marks tests requiring model downloads. CI runs `pytest -m "not network"`.
