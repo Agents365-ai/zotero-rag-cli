@@ -4,7 +4,7 @@ import click
 
 from rak import __version__
 from rak.config import RakConfig
-from rak.errors import EmptyLibraryError, ModelDownloadError, ZotNotFoundError
+from rak.errors import DimensionMismatchError, EmptyLibraryError, ModelDownloadError, ZotNotFoundError
 
 
 @click.group()
@@ -26,6 +26,55 @@ def main(ctx: click.Context, output_json: bool, model: str | None, verbose: bool
     ctx.obj["config"] = config
 
 
+def _create_embedder(config: RakConfig):
+    """Create an Embedder from config."""
+    from rak.embedder import Embedder
+    return Embedder(config.model_name, provider=config.embedding_provider,
+                    base_url=config.embedding_base_url, api_key=config.embedding_api_key)
+
+
+def _run_search(config: RakConfig, query: str, limit: int,
+                collection: str | None, tags: tuple[str, ...] | list[str],
+                hybrid: bool, bm25_only: bool):
+    """Execute a search and return (results, vector_store_or_none).
+
+    Handles bm25-only vs vector/hybrid branching in one place.
+    """
+    from rak.bm25 import BM25Index
+    from rak.searcher import Searcher
+
+    tag_list = list(tags) if tags else None
+    vector_store = None
+
+    if bm25_only:
+        with BM25Index(config.fts_db_path) as bm25:
+            searcher = Searcher(None, None, bm25)
+            results = searcher.bm25_search(query, limit=limit)
+    else:
+        from rak.store import VectorStore
+        embedder = _create_embedder(config)
+        vector_store = VectorStore(config.chroma_dir, embedder.dimension)
+        with BM25Index(config.fts_db_path) as bm25:
+            searcher = Searcher(embedder, vector_store, bm25)
+            if hybrid:
+                results = searcher.hybrid_search(query, limit=limit, collection=collection, tags=tag_list)
+            else:
+                results = searcher.vector_search(query, limit=limit, collection=collection, tags=tag_list)
+
+    return results, vector_store
+
+
+def _make_progress_bar():
+    """Create a Rich progress bar with standard columns."""
+    from rich.progress import Progress, BarColumn, TextColumn, MofNCompleteColumn, TimeRemainingColumn
+    return Progress(
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TimeRemainingColumn(),
+    )
+
+
 @main.command()
 @click.option("--limit", default=5000, help="Max items to index from zot")
 @click.option("--full", is_flag=True, help="Force full rebuild (ignore existing index)")
@@ -33,11 +82,10 @@ def main(ctx: click.Context, output_json: bool, model: str | None, verbose: bool
 def index(ctx: click.Context, limit: int, full: bool) -> None:
     """Index Zotero library for semantic search."""
     from rak.bm25 import BM25Index
-    from rak.embedder import Embedder
     from rak.formatter import format_incremental_stats, format_index_stats
-    from rak.indexer import build_document_text, fetch_zot_items, index_items
+    from rak.indexer import fetch_zot_items, index_items
     from rak.metadata import save_metadata
-    from rak.registry import compute_hash, load_registry, save_registry
+    from rak.registry import load_registry, save_registry
     from rak.store import VectorStore
 
     config: RakConfig = ctx.obj["config"]
@@ -46,7 +94,7 @@ def index(ctx: click.Context, limit: int, full: bool) -> None:
 
     try:
         click.echo("Loading embedding model...")
-        embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
+        embedder = _create_embedder(config)
 
         click.echo("Fetching items from zot...")
         items = fetch_zot_items(config.zot_command, limit=limit)
@@ -71,15 +119,7 @@ def index(ctx: click.Context, limit: int, full: bool) -> None:
         if registry is not None and not registry:
             registry = None
 
-        from rich.progress import Progress, BarColumn, TextColumn, MofNCompleteColumn, TimeRemainingColumn
-
-        with BM25Index(config.fts_db_path) as bm25, \
-             Progress(
-                 TextColumn("[bold blue]{task.description}"),
-                 BarColumn(),
-                 MofNCompleteColumn(),
-                 TimeRemainingColumn(),
-             ) as progress:
+        with BM25Index(config.fts_db_path) as bm25, _make_progress_bar() as progress:
             task_desc = f"Indexing ({config.pdf_provider})" if config.pdf_provider != "pymupdf" else "Indexing"
             task = progress.add_task(task_desc, total=len(items))
 
@@ -90,10 +130,9 @@ def index(ctx: click.Context, limit: int, full: bool) -> None:
                 if full:
                     vector_store.clear()
                     bm25.clear()
-                count, text_cache = index_items(items, embedder, vector_store, bm25, on_progress, storage_dir=storage_dir, chunk_size=config.chunk_size, chunk_overlap=config.chunk_overlap, pdf_provider=config.pdf_provider)
-                new_registry = {k: compute_hash(v) for k, v in text_cache.items()}
-                save_registry(config.data_dir, new_registry)
-                click.echo(format_index_stats(count, output_json=json_out))
+                result = index_items(items, embedder, vector_store, bm25, on_progress, storage_dir=storage_dir, chunk_size=config.chunk_size, chunk_overlap=config.chunk_overlap, pdf_provider=config.pdf_provider)
+                save_registry(config.data_dir, result["registry"])
+                click.echo(format_index_stats(result["added"], output_json=json_out))
             else:
                 result = index_items(items, embedder, vector_store, bm25, on_progress, registry=registry, storage_dir=storage_dir, chunk_size=config.chunk_size, chunk_overlap=config.chunk_overlap, pdf_provider=config.pdf_provider)
                 save_registry(config.data_dir, result["registry"])
@@ -103,7 +142,7 @@ def index(ctx: click.Context, limit: int, full: bool) -> None:
     except EmptyLibraryError as exc:
         click.echo(str(exc))
         ctx.exit(0)
-    except ZotNotFoundError as exc:
+    except (ZotNotFoundError, DimensionMismatchError) as exc:
         click.echo(f"Error: {exc}", err=True)
         ctx.exit(1)
     except ModelDownloadError as exc:
@@ -182,7 +221,10 @@ def config_cmd(ctx: click.Context, key: str | None, value: str | None) -> None:
 
     if key and value:
         if key not in CONFIGURABLE_KEYS:
-            click.echo(f"Unknown config key: {key}", err=True)
+            import difflib
+            close = difflib.get_close_matches(key, CONFIGURABLE_KEYS, n=1, cutoff=0.5)
+            hint = f" Did you mean '{close[0]}'?" if close else ""
+            click.echo(f"Unknown config key: {key}.{hint}", err=True)
             click.echo(f"Valid keys: {', '.join(sorted(CONFIGURABLE_KEYS))}", err=True)
             ctx.exit(1)
             return
@@ -225,7 +267,6 @@ def config_cmd(ctx: click.Context, key: str | None, value: str | None) -> None:
 def similar(ctx: click.Context, key: str, limit: int, collection: str | None, tags: tuple[str, ...]) -> None:
     """Find papers similar to a given one by its Zotero key."""
     from rak.bm25 import BM25Index
-    from rak.embedder import Embedder
     from rak.formatter import format_results
     from rak.searcher import Searcher
     from rak.store import VectorStore
@@ -234,7 +275,7 @@ def similar(ctx: click.Context, key: str, limit: int, collection: str | None, ta
     json_out = ctx.obj["json"]
 
     try:
-        embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
+        embedder = _create_embedder(config)
         vector_store = VectorStore(config.chroma_dir, embedder.dimension)
         with BM25Index(config.fts_db_path) as bm25:
             searcher = Searcher(embedder, vector_store, bm25)
@@ -247,7 +288,7 @@ def similar(ctx: click.Context, key: str, limit: int, collection: str | None, ta
         output = format_results(results, output_json=json_out)
         if output.strip():
             click.echo(output)
-    except ModelDownloadError as exc:
+    except (ModelDownloadError, DimensionMismatchError) as exc:
         click.echo(f"Error: {exc}", err=True)
         ctx.exit(1)
 
@@ -259,11 +300,10 @@ def reindex(ctx: click.Context, limit: int) -> None:
     """Clear indexes and rebuild from scratch. Useful after changing pdf_provider."""
     import shutil
     from rak.bm25 import BM25Index
-    from rak.embedder import Embedder
     from rak.formatter import format_index_stats
     from rak.indexer import fetch_zot_items, index_items
     from rak.metadata import META_FILENAME, save_metadata
-    from rak.registry import REGISTRY_FILENAME, compute_hash, save_registry
+    from rak.registry import REGISTRY_FILENAME, save_registry
     from rak.store import VectorStore
 
     config: RakConfig = ctx.obj["config"]
@@ -280,7 +320,7 @@ def reindex(ctx: click.Context, limit: int) -> None:
         click.echo("Cleared existing indexes.")
 
         click.echo("Loading embedding model...")
-        embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
+        embedder = _create_embedder(config)
 
         click.echo("Fetching items from zot...")
         items = fetch_zot_items(config.zot_command, limit=limit)
@@ -296,25 +336,16 @@ def reindex(ctx: click.Context, limit: int) -> None:
         else:
             click.echo("PDF extraction: Zotero storage not found, indexing metadata only.")
 
-        from rich.progress import Progress, BarColumn, TextColumn, MofNCompleteColumn, TimeRemainingColumn
-
-        with BM25Index(config.fts_db_path) as bm25, \
-             Progress(
-                 TextColumn("[bold blue]{task.description}"),
-                 BarColumn(),
-                 MofNCompleteColumn(),
-                 TimeRemainingColumn(),
-             ) as progress:
+        with BM25Index(config.fts_db_path) as bm25, _make_progress_bar() as progress:
             task_desc = f"Reindexing ({config.pdf_provider})" if config.pdf_provider != "pymupdf" else "Reindexing"
             task = progress.add_task(task_desc, total=len(items))
 
             def on_progress(current: int, total: int) -> None:
                 progress.update(task, completed=current)
 
-            count, text_cache = index_items(items, embedder, vector_store, bm25, on_progress, storage_dir=storage_dir, chunk_size=config.chunk_size, chunk_overlap=config.chunk_overlap, pdf_provider=config.pdf_provider)
-            new_registry = {k: compute_hash(v) for k, v in text_cache.items()}
-            save_registry(config.data_dir, new_registry)
-            click.echo(format_index_stats(count, output_json=json_out))
+            result = index_items(items, embedder, vector_store, bm25, on_progress, storage_dir=storage_dir, chunk_size=config.chunk_size, chunk_overlap=config.chunk_overlap, pdf_provider=config.pdf_provider)
+            save_registry(config.data_dir, result["registry"])
+            click.echo(format_index_stats(result["added"], output_json=json_out))
 
         save_metadata(config.data_dir, config.model_name, vector_store.count())
     except EmptyLibraryError as exc:
@@ -339,40 +370,21 @@ def reindex(ctx: click.Context, limit: int) -> None:
 @click.pass_context
 def search(ctx: click.Context, query: str, hybrid: bool, bm25_only: bool, limit: int, collection: str | None, tags: tuple[str, ...]) -> None:
     """Semantic search over indexed papers."""
-    from rak.bm25 import BM25Index
     from rak.formatter import format_results
-    from rak.searcher import Searcher
 
     config: RakConfig = ctx.obj["config"]
     json_out = ctx.obj["json"]
 
     try:
-        if bm25_only:
-            with BM25Index(config.fts_db_path) as bm25:
-                searcher = Searcher(None, None, bm25)
-                results = searcher.bm25_search(query, limit=limit)
-        else:
-            from rak.embedder import Embedder
-            from rak.store import VectorStore
-            embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
-            vector_store = VectorStore(config.chroma_dir, embedder.dimension)
-            with BM25Index(config.fts_db_path) as bm25:
-                searcher = Searcher(embedder, vector_store, bm25)
-
-                tag_list = list(tags) if tags else None
-                if hybrid:
-                    results = searcher.hybrid_search(query, limit=limit, collection=collection, tags=tag_list)
-                else:
-                    results = searcher.vector_search(query, limit=limit, collection=collection, tags=tag_list)
+        results, _ = _run_search(config, query, limit, collection, tags, hybrid, bm25_only)
 
         output = format_results(results, output_json=json_out)
         if output.strip():
             click.echo(output)
         else:
             click.echo("No results found.")
-    except ModelDownloadError as exc:
+    except (ModelDownloadError, DimensionMismatchError) as exc:
         click.echo(f"Error: {exc}", err=True)
-        click.echo("Check your internet connection and try again.", err=True)
         ctx.exit(1)
 
 
@@ -398,32 +410,14 @@ def ask(
     llm_url: str | None,
 ) -> None:
     """Ask a question and get an answer based on your papers."""
-    from rak.bm25 import BM25Index
     from rak.formatter import format_ask_result
     from rak.llm import LLMClient, LLMConnectionError, LLMServerError
-    from rak.searcher import Searcher
 
     config: RakConfig = ctx.obj["config"]
     json_out = ctx.obj["json"]
 
     try:
-        if bm25_only:
-            with BM25Index(config.fts_db_path) as bm25:
-                searcher = Searcher(None, None, bm25)
-                results = searcher.bm25_search(question, limit=context_n)
-        else:
-            from rak.embedder import Embedder
-            from rak.store import VectorStore
-            embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
-            vector_store = VectorStore(config.chroma_dir, embedder.dimension)
-            with BM25Index(config.fts_db_path) as bm25:
-                searcher = Searcher(embedder, vector_store, bm25)
-
-                tag_list = list(tags) if tags else None
-                if hybrid:
-                    results = searcher.hybrid_search(question, limit=context_n, collection=collection, tags=tag_list)
-                else:
-                    results = searcher.vector_search(question, limit=context_n, collection=collection, tags=tag_list)
+        results, _ = _run_search(config, question, context_n, collection, tags, hybrid, bm25_only)
 
         if not results:
             click.echo("No relevant papers found for your question.")
@@ -455,7 +449,7 @@ def ask(
             click.echo("Sources:")
             for i, s in enumerate(context, 1):
                 click.echo(f"  {i}. {s['key']} - {s['title']} (score: {s['score']:.3f})")
-    except ModelDownloadError as exc:
+    except (ModelDownloadError, DimensionMismatchError) as exc:
         click.echo(f"Error: {exc}", err=True)
         ctx.exit(1)
     except (LLMConnectionError, LLMServerError) as exc:
@@ -485,42 +479,28 @@ def export(
     output_file: str | None,
 ) -> None:
     """Export search results as CSV or BibTeX."""
-    from rak.bm25 import BM25Index
     from rak.export import to_bibtex, to_csv
-    from rak.searcher import Searcher
 
     config: RakConfig = ctx.obj["config"]
-    vector_store = None
 
     try:
-        if bm25_only:
-            with BM25Index(config.fts_db_path) as bm25:
-                searcher = Searcher(None, None, bm25)
-                results = searcher.bm25_search(query, limit=limit)
-        else:
-            from rak.embedder import Embedder
-            from rak.store import VectorStore
-            embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
-            vector_store = VectorStore(config.chroma_dir, embedder.dimension)
-            with BM25Index(config.fts_db_path) as bm25:
-                searcher = Searcher(embedder, vector_store, bm25)
-
-                tag_list = list(tags) if tags else None
-                if hybrid:
-                    results = searcher.hybrid_search(query, limit=limit, collection=collection, tags=tag_list)
-                else:
-                    results = searcher.vector_search(query, limit=limit, collection=collection, tags=tag_list)
+        results, vector_store = _run_search(config, query, limit, collection, tags, hybrid, bm25_only)
 
         if not results:
             click.echo("No results found.")
             return
 
+        # Batch fetch metadata instead of N+1 individual calls
+        meta_map: dict[str, dict] = {}
+        if vector_store is not None:
+            all_ids = [r.doc_id for r in results]
+            doc_data = vector_store.get(ids=all_ids, include=["metadatas"])
+            for doc_id, meta in zip(doc_data["ids"], doc_data["metadatas"]):
+                meta_map[doc_id] = meta
+
         export_rows = []
         for r in results:
-            meta = {}
-            if vector_store is not None:
-                doc_data = vector_store.get(ids=[r.doc_id], include=["metadatas"])
-                meta = doc_data["metadatas"][0] if doc_data["metadatas"] else {}
+            meta = meta_map.get(r.doc_id, {})
             export_rows.append({
                 "key": r.doc_id,
                 "title": r.title,
@@ -542,7 +522,7 @@ def export(
             click.echo(f"Exported {len(export_rows)} results to {output_file}")
         else:
             click.echo(output)
-    except ModelDownloadError as exc:
+    except (ModelDownloadError, DimensionMismatchError) as exc:
         click.echo(f"Error: {exc}", err=True)
         ctx.exit(1)
 
@@ -592,6 +572,7 @@ def chat(
 ) -> None:
     """Interactive multi-turn Q&A over your papers."""
     import sys
+    from contextlib import ExitStack
     from rak.bm25 import BM25Index
     from rak.chat import ChatSession
     from rak.llm import LLMClient, LLMConnectionError, LLMServerError
@@ -600,19 +581,14 @@ def chat(
     config: RakConfig = ctx.obj["config"]
 
     try:
+        stack = ExitStack()
+        bm25 = stack.enter_context(BM25Index(config.fts_db_path))
         if bm25_only:
-            from contextlib import ExitStack
-            stack = ExitStack()
-            bm25 = stack.enter_context(BM25Index(config.fts_db_path))
             searcher = Searcher(None, None, bm25)
         else:
-            from rak.embedder import Embedder
             from rak.store import VectorStore
-            embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
+            embedder = _create_embedder(config)
             vector_store = VectorStore(config.chroma_dir, embedder.dimension)
-            from contextlib import ExitStack
-            stack = ExitStack()
-            bm25 = stack.enter_context(BM25Index(config.fts_db_path))
             searcher = Searcher(embedder, vector_store, bm25)
 
         with stack:
@@ -684,7 +660,7 @@ def chat(
                     sys.stdout.flush()
                 sys.stdout.write("\n\n")
 
-    except ModelDownloadError as exc:
+    except (ModelDownloadError, DimensionMismatchError) as exc:
         click.echo(f"Error: {exc}", err=True)
         ctx.exit(1)
     except (LLMConnectionError, LLMServerError) as exc:

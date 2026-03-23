@@ -55,6 +55,8 @@ def diff_items(
     to_update = []
     text_cache: dict[str, str] = {}
     fetched_keys = set()
+    extraction_attempts = 0
+    extraction_failures = 0
     for item in items:
         key = item.get("key", "")
         if not key:
@@ -64,7 +66,15 @@ def diff_items(
         if storage_dir:
             attachments = find_attachments(storage_dir, key)
             if attachments:
-                attachment_text = "\n\n".join(t for p in attachments if (t := extract_file_text(p, provider=pdf_provider)))
+                extraction_attempts += len(attachments)
+                texts = []
+                for p in attachments:
+                    t = extract_file_text(p, provider=pdf_provider)
+                    if t:
+                        texts.append(t)
+                    else:
+                        extraction_failures += 1
+                attachment_text = "\n\n".join(texts)
         text = build_document_text(item, pdf_text=attachment_text)
         if not text.strip():
             continue
@@ -74,6 +84,15 @@ def diff_items(
             to_add.append(item)
         elif registry[key] != content_hash:
             to_update.append(item)
+    if extraction_attempts > 0 and extraction_failures > 0:
+        rate = extraction_failures / extraction_attempts
+        if rate > 0.5:
+            logger.warning(
+                "%d of %d file extractions failed (%.0f%%). Check PDF provider '%s'.",
+                extraction_failures, extraction_attempts, rate * 100, pdf_provider,
+            )
+        elif extraction_failures > 0:
+            logger.info("%d of %d file extractions failed.", extraction_failures, extraction_attempts)
     to_remove = [k for k in registry if k not in fetched_keys]
     return to_add, to_update, to_remove, text_cache
 
@@ -104,7 +123,12 @@ def index_items(
     chunk_size: int = 512,
     chunk_overlap: int = 64,
     pdf_provider: str = "pymupdf",
-) -> dict | tuple[int, dict[str, str]]:
+) -> dict:
+    """Index items and return a result dict.
+
+    Returns dict with keys: added, updated, removed, unchanged, registry, text_cache.
+    For full indexing (registry=None), added=count and updated/removed/unchanged=0.
+    """
     if registry is not None:
         return _index_incremental(items, embedder, vector_store, bm25_index, on_progress, registry, storage_dir, chunk_size, chunk_overlap, pdf_provider)
     return _index_full(items, embedder, vector_store, bm25_index, on_progress, storage_dir, chunk_size, chunk_overlap, pdf_provider)
@@ -162,14 +186,16 @@ def _index_full(
     chunk_size: int = 512,
     chunk_overlap: int = 64,
     pdf_provider: str = "pymupdf",
-) -> tuple[int, dict[str, str]]:
-    """Index all items. Returns (count, text_cache) where text_cache maps keys to document text."""
+) -> dict:
+    """Index all items from scratch. Returns result dict."""
     count = 0
     text_cache: dict[str, str] = {}
     batch_ids: list[str] = []
     batch_texts: list[str] = []
     batch_metadatas: list[dict] = []
     embed_batch_size = 32
+    extraction_attempts = 0
+    extraction_failures = 0
 
     for i, item in enumerate(items):
         key = item.get("key", "")
@@ -179,7 +205,15 @@ def _index_full(
         if storage_dir:
             attachments = find_attachments(storage_dir, key)
             if attachments:
-                attachment_text = "\n\n".join(t for p in attachments if (t := extract_file_text(p, provider=pdf_provider)))
+                extraction_attempts += len(attachments)
+                texts = []
+                for p in attachments:
+                    t = extract_file_text(p, provider=pdf_provider)
+                    if t:
+                        texts.append(t)
+                    else:
+                        extraction_failures += 1
+                attachment_text = "\n\n".join(texts)
         text = build_document_text(item, attachment_text)
         if not text.strip():
             continue
@@ -210,7 +244,23 @@ def _index_full(
 
     # Flush remaining
     _embed_and_store_batch(batch_ids, batch_texts, batch_metadatas, embedder, vector_store)
-    return count, text_cache
+    if extraction_attempts > 0 and extraction_failures > 0:
+        rate = extraction_failures / extraction_attempts
+        if rate > 0.5:
+            logger.warning(
+                "%d of %d file extractions failed (%.0f%%). Check PDF provider '%s'.",
+                extraction_failures, extraction_attempts, rate * 100, pdf_provider,
+            )
+        elif extraction_failures > 0:
+            logger.info("%d of %d file extractions failed.", extraction_failures, extraction_attempts)
+    return {
+        "added": count,
+        "updated": 0,
+        "removed": 0,
+        "unchanged": 0,
+        "registry": {k: compute_hash(v) for k, v in text_cache.items()},
+        "text_cache": text_cache,
+    }
 
 
 def _index_incremental(
@@ -282,4 +332,5 @@ def _index_incremental(
         "removed": len(to_remove),
         "unchanged": len(items) - added - updated,
         "registry": new_registry,
+        "text_cache": text_cache,
     }

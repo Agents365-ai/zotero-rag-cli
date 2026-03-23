@@ -94,6 +94,22 @@ class RakConfig:
         for key, value in saved.items():
             if key in CONFIGURABLE_KEYS and hasattr(self, key):
                 setattr(self, key, _coerce_config_value(key, value))
+        # Validate loaded config
+        if self.chunk_overlap >= self.chunk_size:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Invalid config: chunk_overlap (%d) >= chunk_size (%d), using defaults",
+                self.chunk_overlap, self.chunk_size,
+            )
+            self.chunk_size = 512
+            self.chunk_overlap = 64
+        if self.pdf_provider not in VALID_PDF_PROVIDERS:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Invalid config: pdf_provider %r, falling back to 'pymupdf'",
+                self.pdf_provider,
+            )
+            self.pdf_provider = "pymupdf"
 
     @property
     def chroma_dir(self) -> Path:

@@ -19,7 +19,7 @@ class SearchResult:
 def rrf_fuse(
     ranked_lists: list[list[dict]],
     limit: int = 10,
-    k: int = 60,
+    k: int = 60,  # Standard RRF constant; higher k reduces impact of top ranks (60 is the value from the original Cormack et al. paper)
 ) -> list[SearchResult]:
     scores: dict[str, float] = {}
     titles: dict[str, str] = {}
@@ -103,7 +103,8 @@ class Searcher:
     ) -> list[SearchResult]:
         embedding = self._embedder.embed(query)
         where = build_where_filter(collection, tags)
-        # Fetch extra results to account for chunk deduplication
+        # Fetch 3x results to ensure enough unique papers after chunk deduplication
+        # (multiple chunks per paper are stored as separate vectors)
         results = self._vector_store.search(embedding, limit=limit * 3, where=where)
         raw = [
             SearchResult(

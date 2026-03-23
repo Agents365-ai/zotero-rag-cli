@@ -19,4 +19,11 @@ def load_registry(data_dir: Path) -> dict[str, str]:
     path = data_dir / REGISTRY_FILENAME
     if not path.exists():
         return {}
-    return json.loads(path.read_text())
+    try:
+        data = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    # Ensure all keys and values are strings
+    return {str(k): str(v) for k, v in data.items()}

@@ -324,7 +324,7 @@ def test_export_csv_output(tmp_path: Path):
          patch("sentence_transformers.SentenceTransformer") as mock_st, \
          patch("rak.searcher.Searcher.vector_search", return_value=mock_results), \
          patch("rak.store.VectorStore.__init__", return_value=None), \
-         patch("rak.store.VectorStore.get", return_value={"metadatas": [{"date": "2024", "authors": "Doe"}]}), \
+         patch("rak.store.VectorStore.get", return_value={"ids": ["A1", "A2"], "metadatas": [{"date": "2024", "authors": "Doe"}, {"date": "2024", "authors": "Doe"}]}), \
          patch("rak.bm25.BM25Index.__init__", return_value=None), \
          patch("rak.bm25.BM25Index.close"):
         mock_st.return_value.get_sentence_embedding_dimension.return_value = 384
@@ -351,7 +351,7 @@ def test_export_bibtex_output(tmp_path: Path):
          patch("sentence_transformers.SentenceTransformer") as mock_st, \
          patch("rak.searcher.Searcher.vector_search", return_value=mock_results), \
          patch("rak.store.VectorStore.__init__", return_value=None), \
-         patch("rak.store.VectorStore.get", return_value={"metadatas": [{"date": "2024", "authors": "Smith"}]}), \
+         patch("rak.store.VectorStore.get", return_value={"ids": ["B1"], "metadatas": [{"date": "2024", "authors": "Smith"}]}), \
          patch("rak.bm25.BM25Index.__init__", return_value=None), \
          patch("rak.bm25.BM25Index.close"):
         mock_st.return_value.get_sentence_embedding_dimension.return_value = 384
@@ -378,7 +378,7 @@ def test_export_to_file(tmp_path: Path):
          patch("sentence_transformers.SentenceTransformer") as mock_st, \
          patch("rak.searcher.Searcher.vector_search", return_value=mock_results), \
          patch("rak.store.VectorStore.__init__", return_value=None), \
-         patch("rak.store.VectorStore.get", return_value={"metadatas": [{}]}), \
+         patch("rak.store.VectorStore.get", return_value={"ids": ["C1"], "metadatas": [{}]}), \
          patch("rak.bm25.BM25Index.__init__", return_value=None), \
          patch("rak.bm25.BM25Index.close"):
         mock_st.return_value.get_sentence_embedding_dimension.return_value = 384

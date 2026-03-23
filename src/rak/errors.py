@@ -20,6 +20,16 @@ class EmptyLibraryError(RakError):
         super().__init__("No items found in Zotero library.")
 
 
+class DimensionMismatchError(RakError):
+    """Raised when embedding dimension doesn't match existing index."""
+
+    def __init__(self, expected: int, got: int) -> None:
+        super().__init__(
+            f"Embedding dimension mismatch: index has {expected}D vectors but current model produces {got}D. "
+            f"Run 'rak reindex' to rebuild with the new model."
+        )
+
+
 class ModelDownloadError(RakError):
     """Raised when model download or loading fails."""
 

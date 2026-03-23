@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import atexit
 import json
+import threading
 
 from mcp.server.fastmcp import FastMCP
 
@@ -11,15 +12,17 @@ from rak.config import RakConfig
 mcp = FastMCP("rak")
 
 _cached_searcher: tuple | None = None
+_searcher_lock = threading.Lock()
 
 
 def _cleanup() -> None:
     """Close cached BM25 SQLite connection on shutdown."""
     global _cached_searcher
-    if _cached_searcher is not None:
-        _, _, bm25 = _cached_searcher
-        bm25.close()
-        _cached_searcher = None
+    with _searcher_lock:
+        if _cached_searcher is not None:
+            _, _, bm25 = _cached_searcher
+            bm25.close()
+            _cached_searcher = None
 
 
 atexit.register(_cleanup)
@@ -31,20 +34,21 @@ def _get_config() -> RakConfig:
 
 def _init_searcher(config: RakConfig):
     global _cached_searcher
-    if _cached_searcher is not None:
+    with _searcher_lock:
+        if _cached_searcher is not None:
+            return _cached_searcher
+
+        from rak.bm25 import BM25Index
+        from rak.embedder import Embedder
+        from rak.searcher import Searcher
+        from rak.store import VectorStore
+
+        embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
+        vector_store = VectorStore(config.chroma_dir, embedder.dimension)
+        bm25 = BM25Index(config.fts_db_path)
+        searcher = Searcher(embedder, vector_store, bm25)
+        _cached_searcher = (searcher, vector_store, bm25)
         return _cached_searcher
-
-    from rak.bm25 import BM25Index
-    from rak.embedder import Embedder
-    from rak.searcher import Searcher
-    from rak.store import VectorStore
-
-    embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
-    vector_store = VectorStore(config.chroma_dir, embedder.dimension)
-    bm25 = BM25Index(config.fts_db_path)
-    searcher = Searcher(embedder, vector_store, bm25)
-    _cached_searcher = (searcher, vector_store, bm25)
-    return _cached_searcher
 
 
 @mcp.tool()

@@ -4,6 +4,8 @@ from pathlib import Path
 
 import chromadb
 
+from rak.errors import DimensionMismatchError
+
 
 class VectorStore:
     COLLECTION_NAME = "rak_papers"
@@ -15,6 +17,17 @@ class VectorStore:
             metadata={"hnsw:space": "cosine"},
         )
         self._dimension = dimension
+        self._validate_dimension()
+
+    def _validate_dimension(self) -> None:
+        """Check that stored embeddings match the expected dimension."""
+        if self._collection.count() == 0:
+            return
+        sample = self._collection.peek(limit=1, include=["embeddings"])
+        if sample["embeddings"]:
+            stored_dim = len(sample["embeddings"][0])
+            if stored_dim != self._dimension:
+                raise DimensionMismatchError(expected=stored_dim, got=self._dimension)
 
     def add(self, ids: list[str], embeddings: list[list[float]], documents: list[str], metadatas: list[dict]) -> None:
         self._collection.upsert(ids=ids, embeddings=embeddings, documents=documents, metadatas=metadatas)
