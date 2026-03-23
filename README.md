@@ -430,7 +430,7 @@ graph LR
 - [ ] Web UI：Streamlit 可视化搜索面板（低优先级）
 - [ ] 提升测试覆盖率：CLI 模块当前约 51%，加固后再开发新功能
 - [ ] 异步 PDF 提取：并行化索引中最慢的环节
-- [ ] GitHub Actions CI：自动化测试 + tag 触发 PyPI 发布
+- [x] GitHub Actions CI：自动化测试 + tag 触发 PyPI 发布
 - [x] README 更新：文档化 MCP 工具及 v0.6.1 改进
 - [ ] 文档站搭建：MkDocs Material + GitHub Pages（待 `notes` 和 `cluster` 完成后再搭建）
 
