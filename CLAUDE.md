@@ -95,6 +95,10 @@ zot CLI → indexer (fetch + parse + PDF/MD extract) → embedder → vector sto
 
 Uses `hatchling`. Entry point: `rak = "rak.cli:main"`, `rak-mcp = "rak.mcp_server:main"`. Package located at `src/rak/` (src layout).
 
+## Publishing
+
+PyPI token is available via `$PYPI_TOKEN` environment variable (set in `~/.zshrc`). To publish: `uv publish --token $PYPI_TOKEN`. CI auto-publishes on `v*` tags via GitHub Actions (requires `PYPI_TOKEN` secret in repo settings).
+
 ## Testing
 
 168 tests. `@pytest.mark.network` marks tests requiring model downloads. CI runs `pytest -m "not network"`.
