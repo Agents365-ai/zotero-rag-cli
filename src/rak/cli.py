@@ -149,6 +149,9 @@ def index(ctx: click.Context, limit: int, full: bool) -> None:
         click.echo(f"Error: {exc}", err=True)
         click.echo("Check your internet connection and try again.", err=True)
         ctx.exit(1)
+    except Exception as exc:
+        click.echo(f"Error: {exc}", err=True)
+        ctx.exit(1)
 
 
 @main.command()
@@ -356,6 +359,9 @@ def similar(ctx: click.Context, key_or_title: str, limit: int, collection: str |
     except (ModelDownloadError, DimensionMismatchError) as exc:
         click.echo(f"Error: {exc}", err=True)
         ctx.exit(1)
+    except Exception as exc:
+        click.echo(f"Error: {exc}", err=True)
+        ctx.exit(1)
 
 
 @main.command()
@@ -423,6 +429,9 @@ def reindex(ctx: click.Context, limit: int) -> None:
         click.echo(f"Error: {exc}", err=True)
         click.echo("Check your internet connection and try again.", err=True)
         ctx.exit(1)
+    except Exception as exc:
+        click.echo(f"Error: {exc}", err=True)
+        ctx.exit(1)
 
 
 @main.command()
@@ -449,6 +458,9 @@ def search(ctx: click.Context, query: str, hybrid: bool, bm25_only: bool, limit:
         else:
             click.echo("No results found.")
     except (ModelDownloadError, DimensionMismatchError) as exc:
+        click.echo(f"Error: {exc}", err=True)
+        ctx.exit(1)
+    except Exception as exc:
         click.echo(f"Error: {exc}", err=True)
         ctx.exit(1)
 
@@ -520,6 +532,9 @@ def ask(
     except (LLMConnectionError, LLMServerError) as exc:
         click.echo(f"Error: {exc}", err=True)
         ctx.exit(1)
+    except Exception as exc:
+        click.echo(f"Error: {exc}", err=True)
+        ctx.exit(1)
 
 
 @main.command()
@@ -588,6 +603,9 @@ def export(
         else:
             click.echo(output)
     except (ModelDownloadError, DimensionMismatchError) as exc:
+        click.echo(f"Error: {exc}", err=True)
+        ctx.exit(1)
+    except Exception as exc:
         click.echo(f"Error: {exc}", err=True)
         ctx.exit(1)
 
@@ -729,5 +747,8 @@ def chat(
         click.echo(f"Error: {exc}", err=True)
         ctx.exit(1)
     except (LLMConnectionError, LLMServerError) as exc:
+        click.echo(f"Error: {exc}", err=True)
+        ctx.exit(1)
+    except Exception as exc:
         click.echo(f"Error: {exc}", err=True)
         ctx.exit(1)
