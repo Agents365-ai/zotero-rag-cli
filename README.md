@@ -171,6 +171,38 @@ rak clear --yes && rak index
 | `intfloat/multilingual-e5-small` | 384 | 470MB | 多语言轻量 |
 | `jinaai/jina-embeddings-v3` | 1024 | 2.3GB | 多语言，长文本支持（8192 tokens） |
 
+### API 嵌入模型
+
+也支持通过 API 使用远程嵌入模型（兼容 OpenAI `/v1/embeddings` 格式）：
+
+```bash
+# OpenAI
+rak config embedding_provider api
+rak config embedding_base_url https://api.openai.com/v1
+rak config embedding_api_key sk-your-key
+rak config model_name text-embedding-3-small
+rak clear --yes && rak index
+
+# 通义千问 (Qwen)
+rak config embedding_provider api
+rak config embedding_base_url https://dashscope.aliyuncs.com/compatible-mode/v1
+rak config embedding_api_key sk-your-key
+rak config model_name text-embedding-v3
+rak clear --yes && rak index
+
+# 本地 Ollama
+rak config embedding_provider api
+rak config embedding_base_url http://localhost:11434/v1
+rak config embedding_api_key not-needed
+rak config model_name nomic-embed-text
+rak clear --yes && rak index
+
+# 切回本地模型
+rak config embedding_provider local
+rak config model_name all-MiniLM-L6-v2
+rak clear --yes && rak index
+```
+
 ### 搜索
 
 ```bash

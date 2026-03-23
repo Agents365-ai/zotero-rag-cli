@@ -171,6 +171,38 @@ Recommended models:
 | `intfloat/multilingual-e5-small` | 384 | 470MB | Multilingual, lightweight |
 | `jinaai/jina-embeddings-v3` | 1024 | 2.3GB | Multilingual, long context (8192 tokens) |
 
+### API Embedding Models
+
+Also supports remote embedding models via API (OpenAI `/v1/embeddings` compatible):
+
+```bash
+# OpenAI
+rak config embedding_provider api
+rak config embedding_base_url https://api.openai.com/v1
+rak config embedding_api_key sk-your-key
+rak config model_name text-embedding-3-small
+rak clear --yes && rak index
+
+# Qwen (Alibaba Cloud DashScope)
+rak config embedding_provider api
+rak config embedding_base_url https://dashscope.aliyuncs.com/compatible-mode/v1
+rak config embedding_api_key sk-your-key
+rak config model_name text-embedding-v3
+rak clear --yes && rak index
+
+# Local Ollama
+rak config embedding_provider api
+rak config embedding_base_url http://localhost:11434/v1
+rak config embedding_api_key not-needed
+rak config model_name nomic-embed-text
+rak clear --yes && rak index
+
+# Switch back to local model
+rak config embedding_provider local
+rak config model_name all-MiniLM-L6-v2
+rak clear --yes && rak index
+```
+
 ### Search
 
 ```bash
