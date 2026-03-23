@@ -137,7 +137,7 @@ def fetch_zot_items(zot_command: str = "zot", limit: int = 5000) -> list[dict]:
         raise ZotNotFoundError(zot_command)
     result = subprocess.run(
         [zot_command, "--json", "--limit", str(limit), "list"],
-        capture_output=True, text=True,
+        capture_output=True, text=True, encoding="utf-8",
     )
     if result.returncode != 0:
         raise RuntimeError(f"zot command failed: {result.stderr}")

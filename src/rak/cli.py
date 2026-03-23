@@ -630,7 +630,7 @@ def completion(shell: str | None) -> None:
             shell = "bash"
 
     env = {**os.environ, "_RAK_COMPLETE": f"{shell}_source"}
-    result = _sp.run(["rak"], capture_output=True, text=True, env=env)
+    result = _sp.run(["rak"], capture_output=True, text=True, encoding="utf-8", env=env)
     click.echo(result.stdout)
 
 

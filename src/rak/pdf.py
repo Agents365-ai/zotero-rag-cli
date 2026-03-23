@@ -29,7 +29,7 @@ def _extract_via_mineru(pdf_path: Path) -> str | None:
         try:
             result = subprocess.run(
                 ["mineru", "-p", str(pdf_path), "-o", tmp_dir],
-                capture_output=True, text=True, timeout=300,
+                capture_output=True, text=True, encoding="utf-8", timeout=300,
             )
             if result.returncode != 0:
                 logger.warning("MinerU failed for %s: %s", pdf_path, result.stderr)
@@ -56,7 +56,7 @@ def _extract_via_docling(pdf_path: Path) -> str | None:
         try:
             result = subprocess.run(
                 ["docling", str(pdf_path), "--output", tmp_dir, "--format", "md"],
-                capture_output=True, text=True, timeout=300,
+                capture_output=True, text=True, encoding="utf-8", timeout=300,
             )
             if result.returncode != 0:
                 logger.warning("Docling failed for %s: %s", pdf_path, result.stderr)
