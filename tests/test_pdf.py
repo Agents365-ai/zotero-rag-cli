@@ -205,3 +205,52 @@ def test_extract_file_text_passes_provider(tmp_path: Path):
 
     mock.assert_called_once_with(pdf_file, provider="mineru")
     assert text == "mineru text"
+
+
+def test_extract_pdf_text_docling_provider(tmp_path: Path):
+    """Docling provider calls subprocess and reads markdown output."""
+    pdf_file = tmp_path / "paper.pdf"
+    pdf_file.write_bytes(b"%PDF-1.4 fake")
+
+    def fake_run(cmd, **kwargs):
+        # Docling outputs markdown to the --output dir
+        output_idx = cmd.index("--output") + 1
+        output_dir = Path(cmd[output_idx])
+        output_dir.mkdir(parents=True, exist_ok=True)
+        md_file = output_dir / (pdf_file.stem + ".md")
+        md_file.write_text("# Docling Title\n\n| Col1 | Col2 |\n|---|---|\n| a | b |")
+        result = MagicMock()
+        result.returncode = 0
+        return result
+
+    with patch("rak.pdf.subprocess.run", side_effect=fake_run):
+        text = extract_pdf_text(pdf_file, provider="docling")
+
+    assert "Docling Title" in text
+    assert "Col1" in text
+
+
+def test_extract_pdf_text_docling_fallback_on_failure(tmp_path: Path):
+    """When Docling fails, falls back to PyMuPDF."""
+    pdf_file = FIXTURES / "sample.pdf"
+
+    def fake_run(cmd, **kwargs):
+        result = MagicMock()
+        result.returncode = 1
+        result.stderr = "docling error"
+        return result
+
+    with patch("rak.pdf.subprocess.run", side_effect=fake_run):
+        text = extract_pdf_text(pdf_file, provider="docling")
+
+    assert "test PDF document" in text
+
+
+def test_extract_pdf_text_docling_fallback_on_exception(tmp_path: Path):
+    """When Docling subprocess raises, falls back to PyMuPDF."""
+    pdf_file = FIXTURES / "sample.pdf"
+
+    with patch("rak.pdf.subprocess.run", side_effect=FileNotFoundError("docling not found")):
+        text = extract_pdf_text(pdf_file, provider="docling")
+
+    assert "test PDF document" in text

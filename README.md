@@ -381,7 +381,7 @@ graph LR
 - [x] 添加 `--verbose` 全局选项，启用 debug 级别日志输出便于排查问题
 - [x] `rak search --bm25` 纯关键词搜索模式，无需加载嵌入模型
 - [x] 索引进度条（Rich progress 替代 `Indexed 50/3038...`）
-- [x] MinerU PDF 解析支持：`rak config pdf_provider mineru` 启用高质量 PDF 提取（表格/公式/排版保留），失败自动回退 PyMuPDF
+- [x] MinerU / Docling PDF 解析支持：`rak config pdf_provider mineru` 或 `docling` 启用高质量 PDF 提取（表格/公式/排版保留），失败自动回退 PyMuPDF
 - [ ] `rak similar KEY` 查找与指定论文相似的论文
 - [x] 智能分块：按段落/章节切分替代固定 512 词窗口
 

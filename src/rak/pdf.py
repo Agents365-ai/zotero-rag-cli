@@ -48,11 +48,35 @@ def _extract_via_mineru(pdf_path: Path) -> str | None:
             return None
 
 
+def _extract_via_docling(pdf_path: Path) -> str | None:
+    """Call Docling CLI to parse a PDF and return the Markdown text.
+    Returns None on any failure so the caller can fall back.
+    """
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        try:
+            result = subprocess.run(
+                ["docling", str(pdf_path), "--output", tmp_dir, "--format", "md"],
+                capture_output=True, text=True, timeout=300,
+            )
+            if result.returncode != 0:
+                logger.warning("Docling failed for %s: %s", pdf_path, result.stderr)
+                return None
+            md_files = list(Path(tmp_dir).rglob("*.md"))
+            if md_files:
+                return md_files[0].read_text(encoding="utf-8").strip()
+            logger.warning("Docling produced no markdown for %s", pdf_path)
+            return None
+        except Exception as exc:
+            logger.warning("Docling error for %s: %s", pdf_path, exc)
+            return None
+
+
 def extract_pdf_text(pdf_path: Path, provider: str = "pymupdf") -> str:
     if not pdf_path.exists():
         return ""
-    if provider == "mineru":
-        text = _extract_via_mineru(pdf_path)
+    if provider in ("mineru", "docling"):
+        extractor = _extract_via_mineru if provider == "mineru" else _extract_via_docling
+        text = extractor(pdf_path)
         if text is not None:
             return text
         logger.warning("Falling back to PyMuPDF for %s", pdf_path)
