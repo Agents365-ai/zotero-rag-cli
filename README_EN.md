@@ -108,8 +108,9 @@ rak search "spatial transcriptomics" --hybrid
 # 4. Terminal Q&A (requires LLM)
 rak ask "What are the main single-cell clustering methods?"
 
-# 5. Find similar papers
+# 5. Find similar papers (supports key or title fuzzy matching)
 rak similar ABC12345
+rak similar "attention is all you need"
 
 # 6. Multi-turn chat (requires LLM)
 rak chat
@@ -344,7 +345,7 @@ pip install zotero-rag-cli[mcp]
 |------|---------|
 | `search_papers` | Semantic/hybrid search, returns metadata + snippets |
 | `search_papers_bm25` | Pure keyword search, no embedding model needed |
-| `similar_papers` | Find similar papers by Zotero key |
+| `similar_papers` | Find similar papers by Zotero key or title |
 | `ask_papers` | LLM Q&A with paper context |
 | `export_papers` | Export search results as CSV or BibTeX |
 | `show_config` | Show current configuration |

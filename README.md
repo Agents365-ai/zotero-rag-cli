@@ -108,8 +108,9 @@ rak search "spatial transcriptomics" --hybrid
 # 4. 终端问答（需要 LLM）
 rak ask "单细胞聚类的主要方法有哪些？"
 
-# 5. 查找相似论文
+# 5. 查找相似论文（支持 key 或标题模糊匹配）
 rak similar ABC12345
+rak similar "attention is all you need"
 
 # 6. 多轮对话（需要 LLM）
 rak chat
@@ -344,7 +345,7 @@ pip install zotero-rag-cli[mcp]
 |------|------|
 | `search_papers` | 语义/混合搜索，返回论文元数据 + 匹配片段 |
 | `search_papers_bm25` | 纯关键词搜索，无需加载嵌入模型 |
-| `similar_papers` | 根据 Zotero key 查找相似论文 |
+| `similar_papers` | 根据 Zotero key 或标题查找相似论文 |
 | `ask_papers` | 基于论文上下文的 LLM 问答 |
 | `export_papers` | 导出搜索结果为 CSV 或 BibTeX |
 | `show_config` | 查看当前配置 |
