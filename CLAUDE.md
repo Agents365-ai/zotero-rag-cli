@@ -69,7 +69,7 @@ zot CLI → indexer (fetch + parse + PDF/MD extract) → embedder → vector sto
 - **metadata.py** — `IndexMetadata` dataclass, `save_metadata()`/`load_metadata()` for tracking index state.
 - **registry.py** — Content hash registry (`registry.json`) for incremental indexing. `compute_hash()`, `save_registry()`, `load_registry()`.
 - **errors.py** — Custom exception hierarchy: `RakError` → `ZotNotFoundError`, `EmptyLibraryError`, `ModelDownloadError`.
-- **mcp_server.py** — MCP server exposing `search_papers` and `index_status` tools for AI assistants (Cursor, LM Studio). Registers `atexit` handler for cleanup.
+- **mcp_server.py** — MCP server exposing tools for AI assistants (Cursor, LM Studio): `search_papers` (vector/hybrid), `search_papers_bm25` (keyword), `similar_papers`, `ask_papers` (LLM Q&A), `export_papers` (CSV/BibTeX), `show_config`, `index_status`. Thread-safe cached searcher with `atexit` cleanup.
 
 **Design decisions:**
 - All computation is local by default — no API keys needed for search. Embedding and LLM can optionally use remote APIs.
@@ -87,10 +87,14 @@ zot CLI → indexer (fetch + parse + PDF/MD extract) → embedder → vector sto
 **Configurable keys:**
 `model_name`, `zot_command`, `llm_base_url`, `llm_model`, `llm_api_key`, `chunk_size`, `chunk_overlap`, `embedding_provider` (`local`/`api`), `embedding_base_url`, `embedding_api_key`, `pdf_provider` (`pymupdf`/`mineru`/`docling`).
 
+## Development Rules
+
+- **MCP parity**: After adding or modifying any CLI command, always sync the corresponding MCP tool in `mcp_server.py` to expose the same functionality. The MCP server should mirror all CLI search/query capabilities.
+
 ## Build System
 
 Uses `hatchling`. Entry point: `rak = "rak.cli:main"`, `rak-mcp = "rak.mcp_server:main"`. Package located at `src/rak/` (src layout).
 
 ## Testing
 
-160 tests. `@pytest.mark.network` marks tests requiring model downloads. CI runs `pytest -m "not network"`.
+168 tests. `@pytest.mark.network` marks tests requiring model downloads. CI runs `pytest -m "not network"`.

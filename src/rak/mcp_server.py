@@ -86,6 +86,181 @@ def search_papers(query: str, limit: int = 10, hybrid: bool = False,
 
 
 @mcp.tool()
+def search_papers_bm25(query: str, limit: int = 10) -> str:
+    """Search your Zotero library using pure BM25 keyword search (no embedding model needed).
+
+    Args:
+        query: Search query (keywords)
+        limit: Maximum number of results (default 10)
+
+    Returns:
+        JSON array of search results with key, title, score, snippet, and source.
+    """
+    from rak.bm25 import BM25Index
+    from rak.searcher import Searcher
+
+    config = _get_config()
+    with BM25Index(config.fts_db_path) as bm25:
+        searcher = Searcher(None, None, bm25)
+        results = searcher.bm25_search(query, limit=limit)
+
+    output = []
+    for r in results:
+        item = {"key": r.doc_id, "title": r.title, "score": round(r.score, 4), "source": r.source}
+        if r.snippet:
+            item["snippet"] = r.snippet
+        output.append(item)
+
+    return json.dumps(output, indent=2, ensure_ascii=False)
+
+
+@mcp.tool()
+def similar_papers(key: str, limit: int = 10,
+                   collection: str | None = None, tags: list[str] | None = None) -> str:
+    """Find papers similar to a given one by its Zotero key.
+
+    Args:
+        key: Zotero item key of the source paper
+        limit: Maximum number of similar papers to return (default 10)
+        collection: Filter by Zotero collection name
+        tags: Filter by tags (OR logic)
+
+    Returns:
+        JSON array of similar papers with key, title, score, and source.
+    """
+    config = _get_config()
+    searcher, _, _ = _init_searcher(config)
+
+    tag_list = tags if tags else None
+    results = searcher.similar_search(key, limit=limit, collection=collection, tags=tag_list)
+
+    output = []
+    for r in results:
+        item = {"key": r.doc_id, "title": r.title, "score": round(r.score, 4), "source": r.source}
+        if r.snippet:
+            item["snippet"] = r.snippet
+        output.append(item)
+
+    return json.dumps(output, indent=2, ensure_ascii=False)
+
+
+@mcp.tool()
+def ask_papers(question: str, limit: int = 5, hybrid: bool = False,
+               collection: str | None = None, tags: list[str] | None = None) -> str:
+    """Ask a question and get an LLM-generated answer based on your indexed papers.
+
+    Args:
+        question: The question to answer
+        limit: Number of papers to use as context (default 5)
+        hybrid: Use hybrid search for context retrieval
+        collection: Filter by Zotero collection name
+        tags: Filter by tags (OR logic)
+
+    Returns:
+        JSON object with answer text and source papers used.
+    """
+    from rak.llm import LLMClient
+
+    config = _get_config()
+    searcher, _, _ = _init_searcher(config)
+
+    tag_list = tags if tags else None
+    if hybrid:
+        results = searcher.hybrid_search(question, limit=limit, collection=collection, tags=tag_list)
+    else:
+        results = searcher.vector_search(question, limit=limit, collection=collection, tags=tag_list)
+
+    if not results:
+        return json.dumps({"answer": "No relevant papers found.", "sources": []})
+
+    context = [{"key": r.doc_id, "title": r.title, "text": r.snippet, "score": r.score} for r in results]
+
+    llm = LLMClient(base_url=config.llm_base_url, model=config.llm_model, api_key=config.llm_api_key)
+    answer = llm.ask(question, context)
+
+    return json.dumps({
+        "answer": answer,
+        "sources": [{"key": c["key"], "title": c["title"], "score": round(c["score"], 4)} for c in context],
+    }, indent=2, ensure_ascii=False)
+
+
+@mcp.tool()
+def export_papers(query: str, limit: int = 10, format: str = "csv",
+                  hybrid: bool = False, collection: str | None = None,
+                  tags: list[str] | None = None) -> str:
+    """Export search results as CSV or BibTeX.
+
+    Args:
+        query: Search query
+        limit: Maximum number of results (default 10)
+        format: Export format, either "csv" or "bibtex" (default "csv")
+        hybrid: Use hybrid search
+        collection: Filter by Zotero collection name
+        tags: Filter by tags (OR logic)
+
+    Returns:
+        Formatted CSV or BibTeX string.
+    """
+    from rak.export import to_bibtex, to_csv
+
+    config = _get_config()
+    searcher, vector_store, _ = _init_searcher(config)
+
+    tag_list = tags if tags else None
+    if hybrid:
+        results = searcher.hybrid_search(query, limit=limit, collection=collection, tags=tag_list)
+    else:
+        results = searcher.vector_search(query, limit=limit, collection=collection, tags=tag_list)
+
+    if not results:
+        return "No results found."
+
+    # Batch fetch metadata
+    meta_map: dict[str, dict] = {}
+    if vector_store is not None:
+        all_ids = [r.doc_id for r in results]
+        doc_data = vector_store.get(ids=all_ids, include=["metadatas"])
+        for doc_id, meta in zip(doc_data["ids"], doc_data["metadatas"]):
+            meta_map[doc_id] = meta
+
+    export_rows = []
+    for r in results:
+        meta = meta_map.get(r.doc_id, {})
+        export_rows.append({
+            "key": r.doc_id, "title": r.title, "score": r.score, "source": r.source,
+            "date": meta.get("date", ""), "authors": meta.get("authors", ""),
+            "item_type": meta.get("item_type", ""),
+        })
+
+    if format == "bibtex":
+        return to_bibtex(export_rows)
+    return to_csv(export_rows)
+
+
+@mcp.tool()
+def show_config() -> str:
+    """Show current rak configuration values.
+
+    Returns:
+        JSON object with all configuration key-value pairs.
+    """
+    config = _get_config()
+    return json.dumps({
+        "model_name": config.model_name,
+        "zot_command": config.zot_command,
+        "llm_base_url": config.llm_base_url,
+        "llm_model": config.llm_model,
+        "embedding_provider": config.embedding_provider,
+        "embedding_base_url": config.embedding_base_url if config.embedding_provider == "api" else None,
+        "pdf_provider": config.pdf_provider,
+        "chunk_size": config.chunk_size,
+        "chunk_overlap": config.chunk_overlap,
+        "data_dir": str(config.data_dir),
+        "zotero_storage_dir": str(config.zotero_storage_dir) if config.zotero_storage_dir else None,
+    }, indent=2)
+
+
+@mcp.tool()
 def index_status() -> str:
     """Show the current index status including item count, model, and last indexed time.
 
