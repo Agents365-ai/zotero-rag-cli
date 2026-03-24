@@ -24,7 +24,7 @@ class VectorStore:
         if self._collection.count() == 0:
             return
         sample = self._collection.get(limit=1, include=["embeddings"])
-        if sample["embeddings"]:
+        if sample["embeddings"] is not None and len(sample["embeddings"]) > 0:
             stored_dim = len(sample["embeddings"][0])
             if stored_dim != self._dimension:
                 raise DimensionMismatchError(expected=stored_dim, got=self._dimension)

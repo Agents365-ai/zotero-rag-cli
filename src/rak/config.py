@@ -80,7 +80,7 @@ class RakConfig:
     zot_command: str = "zot"
     zotero_storage_dir: Path | None = field(default_factory=detect_zotero_storage)
     llm_base_url: str = "http://localhost:11434/v1"
-    llm_model: str = "llama3"
+    llm_model: str = "qwen3.5:2b"
     llm_api_key: str = "not-needed"
     chunk_size: int = 512
     chunk_overlap: int = 64
