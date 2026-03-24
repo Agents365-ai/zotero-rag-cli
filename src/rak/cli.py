@@ -30,7 +30,8 @@ def _create_embedder(config: RakConfig):
     """Create an Embedder from config."""
     from rak.embedder import Embedder
     return Embedder(config.model_name, provider=config.embedding_provider,
-                    base_url=config.embedding_base_url, api_key=config.embedding_api_key)
+                    base_url=config.embedding_base_url, api_key=config.embedding_api_key,
+                    batch_size=config.embedding_batch_size)
 
 
 def _run_search(config: RakConfig, query: str, limit: int,

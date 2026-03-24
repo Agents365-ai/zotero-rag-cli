@@ -7,9 +7,11 @@ class Embedder:
     def __init__(self, model_name: str = DEFAULT_MODEL,
                  provider: str = "local",
                  base_url: str = "http://localhost:11434/v1",
-                 api_key: str = "not-needed") -> None:
+                 api_key: str = "not-needed",
+                 batch_size: int = 32) -> None:
         self._model_name = model_name
         self._provider = provider
+        self._batch_size = max(1, batch_size)
         if provider == "api":
             from openai import OpenAI
             self._client = OpenAI(base_url=base_url, api_key=api_key)
@@ -31,6 +33,10 @@ class Embedder:
         return self._model_name
 
     @property
+    def batch_size(self) -> int:
+        return self._batch_size
+
+    @property
     def dimension(self) -> int:
         if self._provider == "api":
             if self._dimension is None:
@@ -48,7 +54,11 @@ class Embedder:
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         if self._provider == "api":
-            resp = self._client.embeddings.create(input=texts, model=self._model_name)
-            return [d.embedding for d in sorted(resp.data, key=lambda x: x.index)]
-        vecs = self._model.encode(texts, normalize_embeddings=True, batch_size=32)
+            all_embeddings: list[list[float]] = []
+            for i in range(0, len(texts), self._batch_size):
+                chunk = texts[i:i + self._batch_size]
+                resp = self._client.embeddings.create(input=chunk, model=self._model_name)
+                all_embeddings.extend(d.embedding for d in sorted(resp.data, key=lambda x: x.index))
+            return all_embeddings
+        vecs = self._model.encode(texts, normalize_embeddings=True, batch_size=self._batch_size)
         return [v.tolist() for v in vecs]

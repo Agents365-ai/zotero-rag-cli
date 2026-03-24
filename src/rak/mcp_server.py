@@ -54,7 +54,7 @@ def _init_searcher(config: RakConfig):
         from rak.searcher import Searcher
         from rak.store import VectorStore
 
-        embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key)
+        embedder = Embedder(config.model_name, provider=config.embedding_provider, base_url=config.embedding_base_url, api_key=config.embedding_api_key, batch_size=config.embedding_batch_size)
         vector_store = VectorStore(config.chroma_dir, embedder.dimension)
         bm25 = BM25Index(config.fts_db_path)
         searcher = Searcher(embedder, vector_store, bm25)

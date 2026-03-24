@@ -235,7 +235,7 @@ def _index_full(
     batch_ids: list[str] = []
     batch_texts: list[str] = []
     batch_metadatas: list[dict] = []
-    embed_batch_size = 32
+    embed_batch_size = embedder.batch_size
     extraction_attempts = 0
     extraction_failures = 0
 
@@ -330,7 +330,7 @@ def _index_incremental(
     batch_ids: list[str] = []
     batch_texts: list[str] = []
     batch_metadatas: list[dict] = []
-    embed_batch_size = 32
+    embed_batch_size = embedder.batch_size
 
     for i, (item, action) in enumerate(work_items):
         key = item["key"]
