@@ -260,7 +260,7 @@ def test_config_get_single_key(tmp_path: Path):
     with patch("rak.cli.RakConfig", return_value=fake_config):
         result = runner.invoke(main, ["config", "llm_model"])
     assert result.exit_code == 0
-    assert "llm_model = llama3" in result.output
+    assert "llm_model = qwen3.5:2b" in result.output
 
 
 def test_config_get_unknown_key(tmp_path: Path):

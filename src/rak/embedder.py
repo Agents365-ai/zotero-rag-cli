@@ -23,15 +23,22 @@ class Embedder:
                     logging.getLogger(name).setLevel(logging.WARNING)
                 os.environ["SAFETENSORS_FAST_GPU"] = "1"
                 from sentence_transformers import SentenceTransformer
-                _quiet = contextlib.redirect_stdout(io.StringIO())
+                _devnull = open(os.devnull, "w")
+                _old_stdout, _old_stderr = os.dup(1), os.dup(2)
                 try:
-                    with _quiet:
+                    os.dup2(_devnull.fileno(), 1)
+                    os.dup2(_devnull.fileno(), 2)
+                    try:
                         self._model = SentenceTransformer(model_name, trust_remote_code=True)
-                except Exception:
-                    # Retry with HuggingFace mirror on network failure
-                    os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
-                    with _quiet:
+                    except Exception:
+                        os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
                         self._model = SentenceTransformer(model_name, trust_remote_code=True)
+                finally:
+                    os.dup2(_old_stdout, 1)
+                    os.dup2(_old_stderr, 2)
+                    os.close(_old_stdout)
+                    os.close(_old_stderr)
+                    _devnull.close()
             except Exception as exc:
                 from rak.errors import ModelDownloadError
                 raise ModelDownloadError(model_name, str(exc)) from exc
